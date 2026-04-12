@@ -1,1 +1,46 @@
-gAAAAABp3CkHdNlV95PRCS1rctlGkIbNsCv4Jkx_Nbi5tso7bGZnro5blIFf5xM4sMHupFC8y8-tHmLus6Fxfl6-6rq9dTZXoKGgoxj3ewrt1sur-3dJD3ck7e17m7cjxuCCL46ANXElZbhpm17bVQ-29PZVjrG8IZ1pzJ81VGizGVhHQtkeEZT2kBP4kZG9xdvvQHE5eObaMoHDerUNODxa5Rd7EsuHC58wzXDKLgwxsisxJaW_49bEUr_152BWuGzKZOq3R5wavBjOvE05czVN5z1qKedV6iejuQ3_4NSRkEZaxDYEbcoQzMFyYbgRS7_Kdkj_hWnrcKGcDaU3Bu3QAn0xywTWCseKDkSM8As_LWJPbZh0VI1ETe6vRngqsCcivG8LycN_xhnH7WITque9STzhOo76oQ6X8P-lT_W9__eb8mDfSrVvyTfb0cAxAA8dGaFlySXd3E51c6j4vIxf-payyTkyE0JW8Rz--e4YmIP3XJdNRT5OJRxkBJTz85jpgiRsQtPX29BL9Gq9eeGW7UwHZpU68br_jvLSlp1SHM1m96Red-2zfOuVrgklZKwexk8Y_ZRGuL-JOzhmERcYOhqOqb5YLC_FGi4AlHD8RsGMVqbwKCNExV785Cdc1sF7N2--q7snL3lIlmBLdgbctyFM0eKSjtSGj4bjh87rTiO8QPiH4aJ0x9SlUu9XmJVERosoF_KHdKVUrFox0V3QjvKsufM-zaQp1YXQYc-LOnV0FGqms8jJtuiiV_NkQGWYHtAug9C1Mi2o1GBIbwPiifToKeI5_aff4Wua9VF6vswBdAw5U3BUpQHx767icDwtSEWdzSUUPXKcoQfiThC_Q0kCcnhke1735kcUSR8Bcrlss86wJP_JGB2oMtaPYPuHBhM1Hp3MqrZLyKX2wScjs3uH918t3Ydv2DS2oDdUfQkUUjKkLXFCTzu-TGSyPX6I0th08xp3-Z78NruGJVD7DYLsfdmLXnlR4WJbG4p1Iys01G8waGeoBEJ7aJbvzxLnSIQPAlpXsWWWOi7O8MCuGBsjJgoNMn8gAa9JgmiCkGk3au5Kd9XA_f3Tm4LuErx3StNI9ZPQxmsngwWYZUPJB8d0_KdOM5bMHRwTzKXC5vKFyHHzZ5fnyi8x9iWV-W0On73O9fD3OSmBMTRz85nGedHtELcxsCuKiJ2YiHveKg7vF20E-TOEG1-Uz9PkH-4b9bNvRQtvuZ-R35z1FRAoSGeoheW-g9QKHeLZcnEkmkrS99xl1iMbwkH6BXsOeJQW_J6twivJcWE7tunGuxStcGtkHIkPaFYP-o0rwRWsePoinUt9Ha2-bDYucjVL-1jWo00x0syQF8Kph4oGxNXYZI4r9CerlSgLULZmm6XyN_BYCNHDuKtDn2GLWWTYlc50CIl8qEEK3DtRWqqB_HqrLOWj3cKOqTvjXfGddmzQ4wBSU3eavg4qLeGjXyDAuJhPJYjMtdeWvSKEAfeMOya-WBF_WhuBe5CrblPg2L1lYm5Ihjg0pQf4fC2hiDQKQiRu_UWEUelGB_TWlO5KxAENRFksKi5xSQ3XM_-_V8_Q6XvAcFqypCNMM0DzjhD2IOJNZnzWJgXaMrJn1uXBD4yjejSuo_-ultQeHfne7kXjEiakxjb8WsGkscjSQ2Hjxoy3FGI_kyRHCGXCSp0xP7rn3XOxtgwRslXYGfHV2eU7ZZQL0HBq3q09LoAArpcG0dBHlloApdD9oxNksGf6tXpA5Mlu_qwHv1e2RJdEZedZ1DR1glzMwUX2-bw2H6w6tKN40UdWiYUycJxbrT_v_e9ohttoPOUTu_TeovXF9wZHnTEfH_ccbA4Mo1Va___LTnUzMXWRxgA9l07vaM8CbNVu27bMl3NxgCfDX-XTjmZLSGb_2QVulWW2kuHBk6mF9Eu6Vg0GuIQ1Q46TVdDVK8yp_mcJGlsX8bHAYjvx3dNNupL28bfEblDUprHVCoCvXTA0zJrGbBg9
+{
+    "zabbix_export": {
+        "version": "8.0",
+        "host_groups": [
+            {
+                "uuid": "6f6799aa69e844b4b3918f779f2abf08",
+                "name": "Zabbix servers"
+            }
+        ],
+        "hosts": [
+            {
+                "host": "Zabbix server2",
+                "name": "Zabbix server2",
+                "status": "DISABLED",
+                "templates": [
+                    {
+                        "name": "Linux by SNMP"
+                    }
+                ],
+                "groups": [
+                    {
+                        "name": "Zabbix servers"
+                    }
+                ],
+                "interfaces": [
+                    {
+                        "type": "SNMP",
+                        "port": "161",
+                        "details": {
+                            "community": "{$SNMP_COMMUNITY}"
+                        },
+                        "interface_ref": "if1"
+                    }
+                ],
+                "inventory_mode": "AUTOMATIC",
+                "inventory": {
+                    "name": "localhost.localdomain",
+                    "contact": "Root <root@localhost> (configure /etc/snmp/snmp.local.conf)",
+                    "location": "Unknown (edit /etc/snmp/snmpd.conf)",
+                    "location_lat": "56.97612",
+                    "location_lon": "24.16553"
+                }
+            }
+        ]
+    }
+}
