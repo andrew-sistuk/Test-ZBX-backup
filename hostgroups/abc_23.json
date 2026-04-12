@@ -3,8 +3,8 @@
         "version": "8.0",
         "host_groups": [
             {
-                "uuid": "748ad4d098d447d492bb935c907f652f",
-                "name": "Databases"
+                "uuid": "23406431d0754a42affe1218ac0a1ae2",
+                "name": "abc"
             }
         ]
     }
