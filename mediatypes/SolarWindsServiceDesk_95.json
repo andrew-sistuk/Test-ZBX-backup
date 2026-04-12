@@ -1,0 +1,107 @@
+{
+    "zabbix_export": {
+        "version": "8.0",
+        "media_types": [
+            {
+                "name": "SolarWinds Service Desk",
+                "type": "WEBHOOK",
+                "parameters": [
+                    {
+                        "name": "alert_message",
+                        "value": "{ALERT.MESSAGE}"
+                    },
+                    {
+                        "name": "alert_subject",
+                        "value": "{ALERT.SUBJECT}"
+                    },
+                    {
+                        "name": "event_nseverity",
+                        "value": "{EVENT.NSEVERITY}"
+                    },
+                    {
+                        "name": "event_recovery_value",
+                        "value": "{EVENT.RECOVERY.VALUE}"
+                    },
+                    {
+                        "name": "event_source",
+                        "value": "{EVENT.SOURCE}"
+                    },
+                    {
+                        "name": "event_update_status",
+                        "value": "{EVENT.UPDATE.STATUS}"
+                    },
+                    {
+                        "name": "event_value",
+                        "value": "{EVENT.VALUE}"
+                    },
+                    {
+                        "name": "priority_average",
+                        "value": "Medium"
+                    },
+                    {
+                        "name": "priority_default",
+                        "value": "Low"
+                    },
+                    {
+                        "name": "priority_disaster",
+                        "value": "Critical"
+                    },
+                    {
+                        "name": "priority_high",
+                        "value": "High"
+                    },
+                    {
+                        "name": "samanage_incident_id",
+                        "value": "{EVENT.TAGS.__zbx_solarwinds_inc_id}"
+                    },
+                    {
+                        "name": "samanage_token",
+                        "value": "<PUT YOUR TOKEN HERE>"
+                    },
+                    {
+                        "name": "samanage_url",
+                        "value": "<PUT YOUR INSTANCE URL HERE>"
+                    }
+                ],
+                "status": "DISABLED",
+                "script": "var SolarWinds = {\n    params: {},\n\n    setParams: function (params) {\n        if (typeof params !== 'object') {\n            return;\n        }\n\n        SolarWinds.params = params;\n        SolarWinds.params.endpoint = 'https://api.samanage.com/';\n    },\n\n    setProxy: function (HTTPProxy) {\n        SolarWinds.HTTPProxy = HTTPProxy;\n    },\n\n    addCustomFields: function (data, fields) {\n        if (typeof data.incident === 'object' && typeof fields === 'object' && Object.keys(fields).length) {\n            if (typeof fields.sw_fields === 'object' && Object.keys(fields.sw_fields).length) {\n                Object.keys(fields.sw_fields)\n                    .forEach(function(field) {\n                        try {\n                            data.incident[field] = JSON.parse(fields.sw_fields[field]);\n                        }\n                        catch (error) {\n                            data.incident[field] = fields.sw_fields[field];\n                        }\n                    });\n            }\n\n            if (typeof fields.sw_customfields === 'object' && Object.keys(fields.sw_customfields).length) {\n                data.incident.custom_fields_values = {custom_fields_value: []};\n                Object.keys(fields.sw_customfields)\n                    .forEach(function(field) {\n                        data.incident.custom_fields_values.custom_fields_value.push({\n                            name: field,\n                            value: fields.sw_customfields[field]\n                        });\n                    });\n            }\n        }\n\n        return data;\n    },\n\n    request: function (method, query, data) {\n        ['token'].forEach(function (field) {\n            if (typeof SolarWinds.params !== 'object' || typeof SolarWinds.params[field] === 'undefined'\n                || SolarWinds.params[field] === '' ) {\n                throw 'Required SolarWinds param is not set: \"' + field + '\".';\n            }\n        });\n\n        var response,\n            url = SolarWinds.params.endpoint + query,\n            request = new HttpRequest();\n\n        request.addHeader('Content-Type: application/json');\n        request.addHeader('X-Samanage-Authorization: Bearer ' + SolarWinds.params.token);\n        request.addHeader('Accept: application/vnd.samanage.v2.1+json');\n\n        if (typeof SolarWinds.HTTPProxy !== 'undefined' && SolarWinds.HTTPProxy !== '') {\n            request.setProxy(SolarWinds.HTTPProxy);\n        }\n\n        if (typeof data !== 'undefined') {\n            data = JSON.stringify(data);\n        }\n\n        Zabbix.log(4, '[ SolarWinds SD Webhook ] Sending request: ' + url + ((typeof data === 'string')\n            ? ('\\n' + data)\n            : ''));\n\n        switch (method) {\n            case 'get':\n                response = request.get(url, data);\n                break;\n\n            case 'post':\n                response = request.post(url, data);\n                break;\n\n            case 'put':\n                response = request.put(url, data);\n                break;\n\n            default:\n                throw 'Unsupported HTTP request method: ' + method;\n        }\n\n        Zabbix.log(4, '[ SolarWinds SD Webhook ] Received response with status code ' + request.getStatus() +\n            '\\n' + response);\n\n        if (response !== null) {\n            try {\n                response = JSON.parse(response);\n            }\n            catch (error) {\n                Zabbix.log(4, '[ SolarWinds SD Webhook ] Failed to parse response received from SolarWinds');\n                response = null;\n            }\n        }\n\n        if (request.getStatus() < 200 || request.getStatus() >= 300) {\n            var message = 'Request failed with status code ' + request.getStatus();\n\n            if (response !== null && typeof response.error !== 'undefined'\n                && Object.keys(response.error).length > 0) {\n                message += ': ' + JSON.stringify(response.error);\n            }\n            else if (response !== null && typeof response === 'object'\n                && Object.keys(response).length > 0) {\n                Object.keys(response)\n                    .forEach(function(field) {\n                        message += '\\n' + field + ': ' + response[field][0];\n                    });\n            }\n\n            throw message + ' Check debug log for more information.';\n        }\n\n        return {\n            status: request.getStatus(),\n            response: response\n        };\n    },\n\n    createIncident: function(name, description, fields) {\n        var data = {\n            incident: {\n                name: name,\n                description: description,\n                priority: SolarWinds.params.priority\n            }\n        };\n\n        var result = SolarWinds.request('post', 'incidents.json', SolarWinds.addCustomFields(data, fields));\n\n        if (typeof result.response !== 'object' || typeof result.response.id === 'undefined') {\n            throw 'Cannot create SolarWinds incident. Check debug log for more information.';\n        }\n\n        return result.response.id;\n    },\n\n    updateIncident: function(name, fields, message) {\n        var data = {\n            incident: {\n                name: name,\n                priority: SolarWinds.params.priority\n            }\n        };\n\n        SolarWinds.request(\n            'put',\n            'incidents/' + SolarWinds.params.incident_id + '.json',\n            SolarWinds.addCustomFields(data, fields));\n\n        SolarWinds.commenIncident(message);\n    },\n\n    commenIncident: function(message) {\n        var data = {\n            comment: {\n                body: message\n            }\n        };\n\n        SolarWinds.request('post', 'incidents/' + SolarWinds.params.incident_id + '/comments.json', data);\n    }\n};\n\ntry {\n    var params = JSON.parse(value),\n        fields = {},\n        samanage = {},\n        result = {tags: {}},\n        required_params = ['alert_subject', 'event_recovery_value', 'event_source', 'event_value', 'priority_default'],\n        severities = [\n            {name: 'not_classified'},\n            {name: 'information'},\n            {name: 'warning'},\n            {name: 'average'},\n            {name: 'high'},\n            {name: 'disaster'},\n            {name: 'resolved'},\n            {name: 'default'}\n        ];\n\n    fields.sw_fields = {};\n    fields.sw_customfields = {};\n\n    Object.keys(params)\n        .forEach(function (key) {\n            if (key.startsWith('samanage_')) {\n                samanage[key.substring(9)] = params[key];\n            }\n            else if (key.startsWith('sw_field_')) {\n                fields.sw_fields[key.substring(9)] = params[key];\n            }\n            else if (key.startsWith('sw_customfield_')) {\n                fields.sw_customfields[key.substring(15)] = params[key];\n            }\n            else if (required_params.indexOf(key) !== -1 && params[key] === '') {\n                throw 'Parameter \"' + key + '\" can\\'t be empty.';\n            }\n        });\n\n    if ([0, 1, 2, 3].indexOf(parseInt(params.event_source)) === -1) {\n        throw 'Incorrect \"event_source\" parameter given: ' + params.event_source + '\\nMust be 0-3.';\n    }\n\n    // Check {EVENT.VALUE} for trigger-based and internal events.\n    if (params.event_value !== '0' && params.event_value !== '1'\n        && (params.event_source === '0' || params.event_source === '3')) {\n        throw 'Incorrect \"event_value\" parameter given: ' + params.event_value + '\\nMust be 0 or 1.';\n    }\n\n    // Check {EVENT.UPDATE.STATUS} only for trigger-based events.\n    if (params.event_update_status !== '0' && params.event_update_status !== '1' && params.event_source === '0') {\n        throw 'Incorrect \"event_update_status\" parameter given: ' + params.event_update_status + '\\nMust be 0 or 1.';\n    }\n\n    if (params.event_source !== '0' && params.event_recovery_value === '0') {\n        throw 'Recovery operations are supported only for trigger-based actions.';\n    }\n\n    if ([0, 1, 2, 3, 4, 5].indexOf(parseInt(params.event_nseverity)) === -1) {\n        params.event_nseverity = '7';\n    }\n\n    if (params.event_value === '0') {\n        params.event_nseverity = '6';\n    }\n\n    samanage.priority = params['priority_' + severities[params.event_nseverity].name] || params.priority_default;\n\n    SolarWinds.setParams(samanage);\n    SolarWinds.setProxy(params.HTTPProxy);\n\n    // Create incident for non trigger-based events.\n    if (params.event_source !== '0' && params.event_recovery_value !== '0') {\n        SolarWinds.createIncident(params.alert_subject, params.alert_message);\n    }\n    // Create incident for trigger-based events.\n    else if (params.event_value === '1' && params.event_update_status === '0'\n            && (samanage.incident_id === '{EVENT.TAGS.__zbx_solarwinds_inc_id}' || samanage.incident_id === '*UNKNOWN*')) {\n        var key = SolarWinds.createIncident(params.alert_subject, params.alert_message, fields);\n\n\n        result.tags.__zbx_solarwinds_inc_id = key;\n        result.tags.__zbx_solarwinds_inc_link = params.samanage_url +\n            (params.samanage_url.endsWith('/') ? '' : '/') + 'incidents/' + key;\n    }\n    // Update created incident for trigger-based event.\n    else {\n        if (samanage.incident_id === '{EVENT.TAGS.__zbx_solarwinds_inc_id}' || samanage.incident_id === '' || samanage.incident_id === '*UNKNOWN*') {\n            throw 'Incorrect incident key given: ' + samanage.incident_id;\n        }\n        if (!params.alert_message) {\n            throw 'Parameter \"alert_message\" can\\'t be empty.';\n        }\n        SolarWinds.updateIncident(params.alert_subject, fields, params.alert_message);\n    }\n\n    if (params.event_source === '0') {\n        return JSON.stringify(result);\n    }\n    else {\n        return 'OK';\n    }\n}\ncatch (error) {\n    Zabbix.log(3, '[ SolarWinds SD Webhook ] ERROR: ' + error);\n    throw 'Sending failed: ' + error;\n}",
+                "process_tags": "YES",
+                "show_event_menu": "YES",
+                "event_menu_url": "{EVENT.TAGS.__zbx_solarwinds_inc_link}",
+                "event_menu_name": "SolarWinds incident ID: {EVENT.TAGS.__zbx_solarwinds_inc_id}",
+                "message_templates": [
+                    {
+                        "event_source": "TRIGGERS",
+                        "operation_mode": "PROBLEM",
+                        "subject": "[{EVENT.STATUS}] {EVENT.NAME}",
+                        "message": "Problem started at {EVENT.TIME} on {EVENT.DATE}\nProblem name: {EVENT.NAME}\nHost: {HOST.NAME}\nSeverity: {EVENT.SEVERITY}\nOperational data: {EVENT.OPDATA}\nOriginal problem ID: {EVENT.ID}\n\nTrigger description: {TRIGGER.DESCRIPTION}"
+                    },
+                    {
+                        "event_source": "TRIGGERS",
+                        "operation_mode": "RECOVERY",
+                        "subject": "[{EVENT.STATUS}] {EVENT.NAME}",
+                        "message": "Problem has been resolved in {EVENT.DURATION} at {EVENT.RECOVERY.TIME} on {EVENT.RECOVERY.DATE}\nProblem name: {EVENT.NAME}\nHost: {HOST.NAME}\nSeverity: {EVENT.SEVERITY}\nOriginal problem ID: {EVENT.ID}\n{TRIGGER.URL}"
+                    },
+                    {
+                        "event_source": "TRIGGERS",
+                        "operation_mode": "UPDATE",
+                        "subject": "[{EVENT.STATUS}] {EVENT.NAME}",
+                        "message": "{USER.FULLNAME} {EVENT.UPDATE.ACTION} problem at {EVENT.UPDATE.DATE} {EVENT.UPDATE.TIME}.\n{EVENT.UPDATE.MESSAGE}\n\nCurrent problem status is {EVENT.STATUS}, acknowledged: {EVENT.ACK.STATUS}."
+                    },
+                    {
+                        "event_source": "DISCOVERY",
+                        "operation_mode": "PROBLEM",
+                        "subject": "Discovery: {DISCOVERY.DEVICE.STATUS} {DISCOVERY.DEVICE.IPADDRESS}",
+                        "message": "Discovery rule: {DISCOVERY.RULE.NAME}\n\nDevice IP: {DISCOVERY.DEVICE.IPADDRESS}\nDevice DNS: {DISCOVERY.DEVICE.DNS}\nDevice status: {DISCOVERY.DEVICE.STATUS}\nDevice uptime: {DISCOVERY.DEVICE.UPTIME}\n\nDevice service name: {DISCOVERY.SERVICE.NAME}\nDevice service port: {DISCOVERY.SERVICE.PORT}\nDevice service status: {DISCOVERY.SERVICE.STATUS}\nDevice service uptime: {DISCOVERY.SERVICE.UPTIME}"
+                    },
+                    {
+                        "event_source": "AUTOREGISTRATION",
+                        "operation_mode": "PROBLEM",
+                        "subject": "Autoregistration: {HOST.HOST}",
+                        "message": "Host name: {HOST.HOST}\nHost IP: {HOST.IP}\nAgent port: {HOST.PORT}"
+                    }
+                ]
+            }
+        ]
+    }
+}

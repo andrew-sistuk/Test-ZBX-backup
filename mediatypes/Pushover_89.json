@@ -1,0 +1,133 @@
+{
+    "zabbix_export": {
+        "version": "8.0",
+        "media_types": [
+            {
+                "name": "Pushover",
+                "type": "WEBHOOK",
+                "parameters": [
+                    {
+                        "name": "endpoint",
+                        "value": "https://api.pushover.net/1/messages.json"
+                    },
+                    {
+                        "name": "eventid",
+                        "value": "{EVENT.ID}"
+                    },
+                    {
+                        "name": "event_nseverity",
+                        "value": "{EVENT.NSEVERITY}"
+                    },
+                    {
+                        "name": "event_source",
+                        "value": "{EVENT.SOURCE}"
+                    },
+                    {
+                        "name": "event_value",
+                        "value": "{EVENT.VALUE}"
+                    },
+                    {
+                        "name": "expire",
+                        "value": "1200"
+                    },
+                    {
+                        "name": "message",
+                        "value": "{ALERT.MESSAGE}"
+                    },
+                    {
+                        "name": "priority_average",
+                        "value": "0"
+                    },
+                    {
+                        "name": "priority_default",
+                        "value": "0"
+                    },
+                    {
+                        "name": "priority_disaster",
+                        "value": "0"
+                    },
+                    {
+                        "name": "priority_high",
+                        "value": "0"
+                    },
+                    {
+                        "name": "priority_information",
+                        "value": "0"
+                    },
+                    {
+                        "name": "priority_not_classified",
+                        "value": "0"
+                    },
+                    {
+                        "name": "priority_warning",
+                        "value": "0"
+                    },
+                    {
+                        "name": "retry",
+                        "value": "60"
+                    },
+                    {
+                        "name": "title",
+                        "value": "{ALERT.SUBJECT}"
+                    },
+                    {
+                        "name": "token",
+                        "value": "<PUSHOVER TOKEN HERE>"
+                    },
+                    {
+                        "name": "triggerid",
+                        "value": "{TRIGGER.ID}"
+                    },
+                    {
+                        "name": "url",
+                        "value": "{$ZABBIX.URL}"
+                    },
+                    {
+                        "name": "url_title",
+                        "value": "Zabbix"
+                    },
+                    {
+                        "name": "user",
+                        "value": "{ALERT.SENDTO}"
+                    }
+                ],
+                "status": "DISABLED",
+                "max_sessions": "0",
+                "script": "try {\n    var params = JSON.parse(value),\n        request = new HttpRequest(),\n        data,\n        response,\n        severities = [\n            {name: 'not_classified', color: '#97AAB3'},\n            {name: 'information', color: '#7499FF'},\n            {name: 'warning', color: '#FFC859'},\n            {name: 'average', color: '#FFA059'},\n            {name: 'high', color: '#E97659'},\n            {name: 'disaster', color: '#E45959'},\n            {name: 'resolved', color: '#009900'},\n            {name: 'default', color: '#000000'}\n        ],\n        priority;\n\n    if (typeof params.HTTPProxy === 'string' && params.HTTPProxy.trim() !== '') {\n        request.setProxy(params.HTTPProxy);\n    }\n\n    if ([0, 1, 2, 3].indexOf(parseInt(params.event_source)) === -1) {\n        throw 'Incorrect \"event_source\" parameter given: \"' + params.event_source + '\".\\nMust be 0-3.';\n    }\n\n    if (params.event_value !== '0' && params.event_value !== '1'\n        && (params.event_source === '0' || params.event_source === '3')) {\n        throw 'Incorrect \"event_value\" parameter given: ' + params.event_value + '\\nMust be 0 or 1.';\n    }\n\n    if ([0, 1, 2, 3, 4, 5].indexOf(parseInt(params.event_nseverity)) === -1) {\n        params.event_nseverity = '7';\n    }\n\n    if (params.event_value === '0') {\n        params.event_nseverity = '6';\n    }\n\n    priority = params['priority_' + severities[params.event_nseverity].name] || params.priority_default;\n\n    if (isNaN(priority) || priority < -2 || priority > 2) {\n        throw '\"priority\" should be -2..2';\n    }\n\n    if (params.event_source === '0' && isNaN(params.triggerid)) {\n        throw 'field \"triggerid\" is not a number';\n    }\n\n    if (isNaN(params.eventid)) {\n        throw 'field \"eventid\" is not a number';\n    }\n\n    if (typeof params.message !== 'string' || params.message.trim() === '') {\n        throw 'field \"message\" cannot be empty';\n    }\n\n    data = {\n        token: params.token,\n        user: params.user,\n        title: params.title,\n        message: params.message,\n        url: (params.event_source === '0') \n            ? params.url + '/tr_events.php?triggerid=' + params.triggerid + '&eventid=' + params.eventid\n            : params.url,\n        url_title: params.url_title,\n        priority: priority\n    };\n\n    if (priority == 2) {\n        if (isNaN(params.retry) || params.retry < 30) {\n            throw 'field \"retry\" should be a number with value of at least 30 if \"priority\" is set to 2';\n        }\n\n        if (isNaN(params.expire) || params.expire > 10800) {\n            throw 'field \"expire\" should be a number with value of at most 10800 if \"priority\" is set to 2';\n        }\n\n        data.retry = params.retry;\n        data.expire = params.expire;\n    }\n\n    data = JSON.stringify(data);\n    Zabbix.log(4, '[ Pushover Webhook ] Sending request: ' + params.endpoint + '\\n' + data);\n\n    request.addHeader('Content-Type: application/json');\n    response = request.post(params.endpoint, data);\n\n    Zabbix.log(4, '[ Pushover Webhook ] Received response with status code ' + request.getStatus() + '\\n' + response);\n\n    if (response !== null) {\n        try {\n            response = JSON.parse(response);\n        }\n        catch (error) {\n            Zabbix.log(4, '[ Pushover Webhook ] Failed to parse response received from Pushover');\n            response = null;\n        }\n    }\n\n    if (request.getStatus() != 200 || response === null || typeof response !== 'object' || response.status !== 1) {\n        if (response !== null && typeof response === 'object' && typeof response.errors === 'object'\n                && typeof response.errors[0] === 'string') {\n            throw response.errors[0];\n        }\n        else {\n            throw 'Unknown error. Check debug log for more information.';\n        }\n    }\n\n    return 'OK';\n}\ncatch (error) {\n    Zabbix.log(4, '[ Pushover Webhook ] Pushover notification failed: ' + error);\n    throw 'Pushover notification failed: ' + error;\n}",
+                "description": "Please refer to setup guide here: https://git.zabbix.com/projects/ZBX/repos/zabbix/browse/templates/media/pushover\n\nSet token parameter with to your Pushover application key.\nWhen assigning Pushover media to the Zabbix user - add user key into send to field.",
+                "message_templates": [
+                    {
+                        "event_source": "TRIGGERS",
+                        "operation_mode": "PROBLEM",
+                        "subject": "Problem: {EVENT.NAME}",
+                        "message": "Problem started at {EVENT.TIME} on {EVENT.DATE}\nProblem name: {EVENT.NAME}\nHost: {HOST.NAME}\nSeverity: {EVENT.SEVERITY}\nOperational data: {EVENT.OPDATA}\nOriginal problem ID: {EVENT.ID}\n{TRIGGER.URL}"
+                    },
+                    {
+                        "event_source": "TRIGGERS",
+                        "operation_mode": "RECOVERY",
+                        "subject": "Resolved in {EVENT.DURATION}: {EVENT.NAME}",
+                        "message": "Problem has been resolved at {EVENT.RECOVERY.TIME} on {EVENT.RECOVERY.DATE}\nProblem name: {EVENT.NAME}\nProblem duration: {EVENT.DURATION}\nHost: {HOST.NAME}\nSeverity: {EVENT.SEVERITY}\nOriginal problem ID: {EVENT.ID}\n{TRIGGER.URL}"
+                    },
+                    {
+                        "event_source": "TRIGGERS",
+                        "operation_mode": "UPDATE",
+                        "subject": "Updated problem in {EVENT.AGE}: {EVENT.NAME}",
+                        "message": "{USER.FULLNAME} {EVENT.UPDATE.ACTION} problem at {EVENT.UPDATE.DATE} {EVENT.UPDATE.TIME}.\n{EVENT.UPDATE.MESSAGE}\n\nCurrent problem status is {EVENT.STATUS}, age is {EVENT.AGE}, acknowledged: {EVENT.ACK.STATUS}."
+                    },
+                    {
+                        "event_source": "DISCOVERY",
+                        "operation_mode": "PROBLEM",
+                        "subject": "Discovery: {DISCOVERY.DEVICE.STATUS} {DISCOVERY.DEVICE.IPADDRESS}",
+                        "message": "Discovery rule: {DISCOVERY.RULE.NAME}\n\nDevice IP: {DISCOVERY.DEVICE.IPADDRESS}\nDevice DNS: {DISCOVERY.DEVICE.DNS}\nDevice status: {DISCOVERY.DEVICE.STATUS}\nDevice uptime: {DISCOVERY.DEVICE.UPTIME}\n\nDevice service name: {DISCOVERY.SERVICE.NAME}\nDevice service port: {DISCOVERY.SERVICE.PORT}\nDevice service status: {DISCOVERY.SERVICE.STATUS}\nDevice service uptime: {DISCOVERY.SERVICE.UPTIME}"
+                    },
+                    {
+                        "event_source": "AUTOREGISTRATION",
+                        "operation_mode": "PROBLEM",
+                        "subject": "Autoregistration: {HOST.HOST}",
+                        "message": "Host name: {HOST.HOST}\nHost IP: {HOST.IP}\nAgent port: {HOST.PORT}"
+                    }
+                ]
+            }
+        ]
+    }
+}

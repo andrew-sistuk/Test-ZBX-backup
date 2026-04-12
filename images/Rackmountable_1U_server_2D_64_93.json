@@ -1,0 +1,12 @@
+{
+    "zabbix_export": {
+        "version": "8.0",
+        "images": [
+            {
+                "name": "Rackmountable_1U_server_2D_(64)",
+                "imagetype": "1",
+                "encodedImage": "iVBORw0KGgoAAAANSUhEUgAAAEAAAAAECAYAAAA+oDmkAAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAAG7AAABuwBHnU4NQAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAAJUSURBVDhPlVNNbxJRFD1vvoA2DAGMUJUWApRKqmzYmOgP6MKdP8A/4cp/0R9hGt3p2q5smkiNXUhiFzVQG0BIgHb4mGFgnve+tIRd9SRv8ebee+65590RAD7lcrknnudZi8Ui/ez5i0AAIggC8PlX6LqOcDgMKYQsFAqYzTw6Phq/zoUMJORdBCswTROWZSmuRw82ZK87aLVal+tiJecuvmjUnoVCoSCi6wtfNyVxod/tWCe144QQopXJZLTJZHJqUK67u7ubOTw8HK2trYl2548+m46xUyphNBotCZPJJFzXxXg8VndN01Aul3FxcQEiRDweBzXEj59n8LwZho5D+R5+N5vIZrPwfX/JlUqlMBwOKc9Tdx6WBKl+DtUlEgnV7+hrjUyNoHnZ2SzkNlF+vAN/Pkev10OptI2Dgw8YkZ5bY6SUSgtjMHRQKmbx5st7vH75Fu17GazX9lVtNBpN0qOv1+v1b2yAR4UaibBZWDgSxsS5UsOSIcstYPJYLAbakuUg/I0xJ1F8eAvYGNdz4U5dFe/3+8jn8yq2Ctu21bAMFs1x7sX8zLXah6Fx/GZAbstbValUsJFOqXi706FH28Y7MoWNFyJQPEdPt2DIz4hNBOY3eqmPzTpp5jnbtb+3t/eKhHo04Fbifiq4vhoK0zDVALdDcgGLXH1JXnk26haGYcAMhWSxWIRzsz1n9bqwybjVOs7jh/L9+fJbJBLBdDpd3nkrNMOQDzfS6hdwnGsD/wHSttA0XYY0iZmm0S8gMej2rdPvJ3HLMs+r1Wqy0Wh8/AtfDyk2FQl7AgAAAABJRU5ErkJggg=="
+            }
+        ]
+    }
+}

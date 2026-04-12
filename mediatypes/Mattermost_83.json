@@ -1,0 +1,160 @@
+{
+    "zabbix_export": {
+        "version": "8.0",
+        "media_types": [
+            {
+                "name": "Mattermost",
+                "type": "WEBHOOK",
+                "parameters": [
+                    {
+                        "name": "alert_message",
+                        "value": "{ALERT.MESSAGE}"
+                    },
+                    {
+                        "name": "alert_subject",
+                        "value": "{ALERT.SUBJECT}"
+                    },
+                    {
+                        "name": "bot_token",
+                        "value": "<YOUR BOT TOKEN>"
+                    },
+                    {
+                        "name": "discovery_host_dns",
+                        "value": "{DISCOVERY.DEVICE.DNS}"
+                    },
+                    {
+                        "name": "discovery_host_ip",
+                        "value": "{DISCOVERY.DEVICE.IPADDRESS}"
+                    },
+                    {
+                        "name": "event_date",
+                        "value": "{EVENT.DATE}"
+                    },
+                    {
+                        "name": "event_id",
+                        "value": "{EVENT.ID}"
+                    },
+                    {
+                        "name": "event_nseverity",
+                        "value": "{EVENT.NSEVERITY}"
+                    },
+                    {
+                        "name": "event_opdata",
+                        "value": "{EVENT.OPDATA}"
+                    },
+                    {
+                        "name": "event_recovery_date",
+                        "value": "{EVENT.RECOVERY.DATE}"
+                    },
+                    {
+                        "name": "event_recovery_time",
+                        "value": "{EVENT.RECOVERY.TIME}"
+                    },
+                    {
+                        "name": "event_severity",
+                        "value": "{EVENT.SEVERITY}"
+                    },
+                    {
+                        "name": "event_source",
+                        "value": "{EVENT.SOURCE}"
+                    },
+                    {
+                        "name": "event_tags",
+                        "value": "{EVENT.TAGS}"
+                    },
+                    {
+                        "name": "event_time",
+                        "value": "{EVENT.TIME}"
+                    },
+                    {
+                        "name": "event_update_date",
+                        "value": "{EVENT.UPDATE.DATE}"
+                    },
+                    {
+                        "name": "event_update_status",
+                        "value": "{EVENT.UPDATE.STATUS}"
+                    },
+                    {
+                        "name": "event_update_time",
+                        "value": "{EVENT.UPDATE.TIME}"
+                    },
+                    {
+                        "name": "event_value",
+                        "value": "{EVENT.VALUE}"
+                    },
+                    {
+                        "name": "host_ip",
+                        "value": "{HOST.IP}"
+                    },
+                    {
+                        "name": "host_name",
+                        "value": "{HOST.HOST}"
+                    },
+                    {
+                        "name": "mattermost_url",
+                        "value": "<YOUR MATTERMOST URL>"
+                    },
+                    {
+                        "name": "send_mode",
+                        "value": "alarm"
+                    },
+                    {
+                        "name": "send_to",
+                        "value": "{ALERT.SENDTO}"
+                    },
+                    {
+                        "name": "trigger_description",
+                        "value": "{TRIGGER.DESCRIPTION}"
+                    },
+                    {
+                        "name": "trigger_id",
+                        "value": "{TRIGGER.ID}"
+                    },
+                    {
+                        "name": "zabbix_url",
+                        "value": "{$ZABBIX.URL}"
+                    }
+                ],
+                "status": "DISABLED",
+                "attempts": "1",
+                "script": "var SEVERITY_COLORS = [\n    '#97AAB3', '#7499FF', '#FFC859',\n    '#FFA059', '#E97659', '#E45959'\n];\n\nvar RESOLVE_COLOR = '#009900';\n\nvar SEND_MODE_HANDLERS = {\n    alarm: handlerAlarm,\n    event: handlerEvent\n};\n\nif (!String.prototype.format) {\n    String.prototype.format = function() {\n        var args = arguments;\n\n        return this.replace(/{(\\d+)}/g, function(match, number) {\n            return number in args\n                ? args[number]\n                : match\n            ;\n        });\n    };\n}\n\nfunction isEventProblem(params) {\n    return params.event_value == 1\n        && params.event_update_status == 0\n    ;\n}\n\nfunction isEventUpdate(params) {\n    return params.event_value == 1\n        && params.event_update_status == 1\n    ;\n}\n\nfunction isEventResolve(params) {\n    return params.event_value == 0;\n}\n\nfunction getPermalink(mattermost_url, team_name, postid) {\n    return '{0}/{1}/pl/{2}'.format(\n        mattermost_url.replace(/\\/+$/, ''),\n        team_name,\n        postid\n    );\n}\n\nfunction getChannel(send_to) {\n    switch (true) {\n        case /.+\\/#.+/.test(send_to):\n            return getChannelByName(send_to);\n\n        case /@.+/.test(send_to):\n            return getDirectChannel(send_to);\n\n        default:\n            return getChannelByID(send_to);\n    }\n}\n\nfunction getChannelByName(send_to) {\n    var team_chan = send_to\n        .trim()\n        .split('/#');\n\n    var resp = JSON.parse(req.get(\n        Mattermost.channel_byname.format(team_chan[0], team_chan[1]),\n        JSON.stringify(fields)\n    )\n    );\n\n    if (req.getStatus() != 200) {\n        throw '[{0}] {1}'.format(resp.status_code, resp.message);\n    }\n\n    return resp;\n}\n\nfunction getDirectChannel(send_to) {\n    Zabbix.log(5, '[ Mattermost Webhook ] Call {0}({1})'.format(\n        arguments.callee.name,\n        JSON.stringify(arguments)\n    ));\n\n    var teamUser = send_to\n            .trim()\n            .split('/@'),\n        bot = getBotUser(),\n        user = getUserByName(teamUser[1]);\n\n    var resp = JSON.parse(req.post(\n        Mattermost.direct_channel,\n        JSON.stringify([bot.id, user.id])\n    )\n    );\n\n    Zabbix.log(5, '[ Mattermost Webhook ] Result {0}: {1}'.format(\n        arguments.callee.name,\n        JSON.stringify(resp)\n    ));\n\n    if (req.getStatus() != 201) {\n        throw '[{0}] {1}'.format(resp.status_code, resp.message);\n    }\n\n    resp.team_name = teamUser[0];\n\n    return resp;\n}\n\nfunction getChannelByID(channelID) {\n    Zabbix.log(5, '[ Mattermost Webhook ] Call {0}({1})'.format(\n        arguments.callee.name,\n        JSON.stringify(arguments)\n    ));\n\n    var resp = JSON.parse(req.get(\n        Mattermost.get_channel.format(channelID),\n        JSON.stringify(fields)\n    )\n    );\n\n    Zabbix.log(5, '[ Mattermost Webhook ] Result {0}: {1}'.format(\n        arguments.callee.name,\n        JSON.stringify(resp)\n    ));\n\n    if (req.getStatus() != 200) {\n        throw '[{0}] {1}'.format(resp.status_code, resp.message);\n    }\n\n    return resp;\n}\n\nfunction getBotUser() {\n    Zabbix.log(5, '[ Mattermost Webhook ] Call {0}({1})'.format(\n        arguments.callee.name,\n        JSON.stringify(arguments)\n    ));\n\n    var resp = JSON.parse(req.get(\n        Mattermost.bot_user,\n        JSON.stringify(fields)\n    )\n    );\n\n    Zabbix.log(5, '[ Mattermost Webhook ] Result {0}: {1}'.format(\n        arguments.callee.name,\n        JSON.stringify(resp)\n    ));\n\n    if (req.getStatus() != 200) {\n        throw '[{0}] {1}'.format(resp.status_code, resp.message);\n    }\n\n    return resp;\n}\n\nfunction getUserByName(userName) {\n    Zabbix.log(5, '[ Mattermost Webhook ] Call {0}({1})'.format(\n        arguments.callee.name,\n        JSON.stringify(arguments)\n    ));\n\n    var resp = JSON.parse(req.get(\n        Mattermost.user_byname.format(userName),\n        JSON.stringify(fields)\n    )\n    );\n\n    Zabbix.log(5, '[ Mattermost Webhook ] Result {0}: {1}'.format(\n        arguments.callee.name,\n        JSON.stringify(resp)\n    ));\n\n    if (req.getStatus() != 200) {\n        throw '[{0}] {1}'.format(resp.status_code, resp.message);\n    }\n\n    return resp;\n}\n\nfunction getTeamByID(teamID) {\n    Zabbix.log(5, '[ Mattermost Webhook ] Call {0}({1})'.format(\n        arguments.callee.name,\n        JSON.stringify(arguments)\n    ));\n\n    var resp = JSON.parse(req.get(\n        Mattermost.get_team.format(teamID),\n        JSON.stringify(fields)\n    )\n    );\n\n    Zabbix.log(5, '[ Mattermost Webhook ] Result {0}: {1}'.format(\n        arguments.callee.name,\n        JSON.stringify(resp)\n    ));\n\n    if (req.getStatus() != 200) {\n        throw '[{0}] {1}'.format(resp.status_code, resp.message);\n    }\n\n    return resp;\n}\n\nfunction createProblemURL(zabbix_url, triggerid, eventid, event_source) {\n    var problem_url = '';\n    if (event_source === '0') {\n        problem_url = '{0}/tr_events.php?triggerid={1}&eventid={2}'\n            .format(\n                zabbix_url,\n                triggerid,\n                eventid\n            );\n    }\n    else {\n        problem_url = zabbix_url;\n    }\n\n    return problem_url;\n}\n\nfunction getTagValue(event_tags, key) {\n    var pattern = new RegExp('(' + key + ':.+)');\n    var tagValue = event_tags\n        .split(',')\n        .filter(function (v) {\n            return v.match(pattern);\n        })\n        .map(function (v) {\n            return v.split(':')[1];\n        })[0]\n        || 0;\n\n    return tagValue;\n}\n\nfunction handlerAlarm(req, params) {\n    var channel = getChannel(params.send_to);\n    var fields = {\n        channel_id: channel.id,\n        props: {}\n    };\n\n    if (isEventProblem(params)) {\n        var team_name = channel.team_name\n            ? channel.team_name\n            : getTeamByID(channel.team_id).name;\n\n        fields.props.attachments = [\n            createMessage(\n                SEVERITY_COLORS[params.event_nseverity] || 0,\n                params.event_date,\n                params.event_time,\n                createProblemURL(params.zabbix_url, params.trigger_id, params.event_id, params.event_source)\n            )\n        ];\n\n        var resp = JSON.parse(req.post(\n            Mattermost.post_message,\n            JSON.stringify(fields)\n        )\n        );\n\n        if (req.getStatus() != 201) {\n            throw '[{0}] {1}'.format(resp.status_code, resp.message);\n        }\n\n        result.tags.__mattermost_post_id = resp.id;\n        result.tags.__mattermost_channel_id = channel.id;\n        result.tags.__mattermost_channel_name = channel.name;\n        result.tags.__mattermost_message_link = getPermalink(\n            params.mattermost_url,\n            team_name,\n            resp.id\n        );\n\n    }\n    else if (isEventUpdate(params)) {\n        fields.root_id = getTagValue(params.event_tags, 'mattermost_post_id');\n\n        if (params.event_source === '0') {}\n        fields.props.attachments = [\n            createMessage(\n                SEVERITY_COLORS[params.event_nseverity] || 0,\n                params.event_update_date,\n                params.event_update_time,\n                createProblemURL(params.zabbix_url, params.trigger_id, params.event_id, params.event_source),\n                true\n            )\n        ];\n\n        resp = JSON.parse(req.post(\n            Mattermost.post_message, JSON.stringify(fields)\n        )\n        );\n\n        if (req.getStatus() != 201) {\n            throw '[{0}] {1}'.format(resp.status_code, resp.message);\n        }\n\n    }\n    else if (isEventResolve(params)) {\n        fields.channel_id = getTagValue(params.event_tags, 'mattermost_channel_id');\n        fields.id = getTagValue(params.event_tags, 'mattermost_post_id');\n        fields.props.attachments = [\n            createMessage(\n                RESOLVE_COLOR,\n                params.event_date,\n                params.event_time,\n                createProblemURL(params.zabbix_url, params.trigger_id, params.event_id, params.event_source)\n            )\n        ];\n\n        var post_id = getTagValue(params.event_tags, 'mattermost_post_id');\n\n        resp = JSON.parse(req.put(\n            Mattermost.chat_update.format(post_id),\n            JSON.stringify(fields)\n        )\n        );\n\n        if (req.getStatus() != 200) {\n            throw '[{0}] {1}'.format(resp.status_code, resp.message);\n        }\n    }\n}\n\nfunction handlerEvent(req, params) {\n    var channel = getChannel(params.send_to);\n    var fields = {\n        channel_id: channel.id,\n        props: {}\n    };\n\n    if (isEventProblem(params)) {\n        var team_name = channel.team_name\n            ? channel.team_name\n            : getTeamByID(channel.team_id).name;\n\n        fields.props.attachments = [\n            createMessage(\n                SEVERITY_COLORS[params.event_nseverity] || 0,\n                params.event_date,\n                params.event_time,\n                createProblemURL(params.zabbix_url, params.trigger_id, params.event_id, params.event_source)\n            )\n        ];\n\n        var resp = JSON.parse(req.post(Mattermost.post_message, JSON.stringify(fields)));\n\n        if (req.getStatus() != 201) {\n            throw '[{0}] {1}'.format(resp.status_code, resp.message);\n        }\n\n        result.tags.__mattermost_channel_name = channel.name;\n        result.tags.__mattermost_message_link = getPermalink(\n            params.mattermost_url,\n            team_name,\n            resp.id\n        );\n\n    }\n    else if (isEventUpdate(params)) {\n        fields.props.attachments = [\n            createMessage(\n                SEVERITY_COLORS[params.event_nseverity] || 0,\n                params.event_update_date,\n                params.event_update_time,\n                createProblemURL(params.zabbix_url, params.trigger_id, params.event_id, params.event_source),\n                false\n            )\n        ];\n\n        resp = JSON.parse(req.post(Mattermost.post_message, JSON.stringify(fields)));\n\n        if (req.getStatus() != 201) {\n            throw '[{0}] {1}'.format(resp.status_code, resp.message);\n        }\n\n    }\n    else if (isEventResolve(params)) {\n        fields.props.attachments = [\n            createMessage(\n                RESOLVE_COLOR,\n                params.event_recovery_date,\n                params.event_recovery_time,\n                createProblemURL(params.zabbix_url, params.trigger_id, params.event_id, params.event_source)\n            )\n        ];\n\n        resp = JSON.parse(req.post(Mattermost.post_message, JSON.stringify(fields)));\n\n        if (req.getStatus() != 201) {\n            throw '[{0}] {1}'.format(resp.status_code, resp.message);\n        }\n    }\n}\n\nfunction createMessage(\n    event_severity_color,\n    event_date,\n    event_time,\n    problem_url,\n    isShort\n) {\n    var message = {\n        fallbac: params.alert_subject,\n        title: params.alert_subject,\n        color: event_severity_color,\n        title_link: problem_url,\n        footer: problem_url,\n\n        fields: [\n            {\n                title: 'Host',\n                value: '{0} [{1}]'.format(params.host_name, params.host_ip),\n                short: true\n            },\n            {\n                title: 'Event time',\n                value: '{0} {1}'.format(event_date, event_time),\n                short: true\n            }\n        ],\n    };\n\n    \n    if (params.event_source === '0') {\n        message.fields.push(\n            {\n                title: 'Severity',\n                value: params.event_severity,\n                short: true\n            },\n            {\n                title: 'Opdata',\n                value: params.event_opdata,\n                short: true\n            }\n        );\n    }\n\n    if (!isShort && params.event_source === '0') {\n        message.fields.push(\n            {\n                title: 'Event tags',\n                value: '`{0}`'.format(params.event_tags.replace(/__.+?:(.+?,|.+)/g, '') || 'None'),\n                short: true\n            },\n            {\n                title: 'Trigger description',\n                value: params.trigger_description,\n                short: true\n            }\n        );\n    }\n\n    if (params.event_source !== '0' || params.event_update_status === '1') {\n        message.fields.push(\n            {\n                title: 'Details',\n                value: params.alert_message,\n                short: false\n            }\n        );\n    }\n\n    return message;\n}\n\nfunction validateParams(params) {\n    if (typeof params.bot_token !== 'string' || params.bot_token.trim() === '') {\n        throw 'Field \"bot_token\" cannot be empty';\n    }\n\n    if (isNaN(params.event_id)) {\n        throw 'Field \"event_id\" is not a number';\n    }\n\n    if ([0, 1, 2, 3].indexOf(parseInt(params.event_source)) === -1) {\n        throw 'Incorrect \"event_source\" parameter given: \"' + params.event_source + '\".\\nMust be 0-3.';\n    }\n\n    if (params.event_source !== '0') {\n        params.event_nseverity = '0';\n        params.event_severity = 'Not classified';\n        params.event_update_status = '0';\n        params.send_mode = 'event';\n    }\n\n    if (params.event_source === '1' || params.event_source === '2') {\n        params.event_value = '1';\n    }\n\n    if (params.event_source === '1') {\n        params.host_name = params.discovery_host_dns;\n        params.host_ip = params.discovery_host_ip;\n    }\n\n    if ([0, 1, 2, 3, 4, 5].indexOf(parseInt(params.event_nseverity)) === -1) {\n        throw 'Incorrect \"event_nseverity\" parameter given: ' + params.event_nseverity + '\\nMust be 0-5.';\n    }\n\n    if (typeof params.event_severity !== 'string' || params.event_severity.trim() === '') {\n        throw 'Field \"event_severity\" cannot be empty';\n    }\n\n    if (params.event_update_status !== '0' && params.event_update_status !== '1') {\n        throw 'Incorrect \"event_update_status\" parameter given: ' + params.event_update_status + '\\nMust be 0 or 1.';\n    }\n\n    if (params.event_value !== '0' && params.event_value !== '1') {\n        throw 'Incorrect \"event_value\" parameter given: ' + params.event_value + '\\nMust be 0 or 1.';\n    }\n\n    if (typeof params.host_ip !== 'string' || params.host_ip.trim() === '') {\n        throw 'Field \"host_ip\" cannot be empty';\n    }\n\n    if (typeof params.host_name !== 'string' || params.host_name.trim() === '') {\n        throw 'Field \"host_name\" cannot be empty';\n    }\n\n    if (typeof params.mattermost_url !== 'string' || params.mattermost_url.trim() === '') {\n        throw 'Field \"mattermost_url\" cannot be empty';\n    }\n\n    if (!/^(http|https):\\/\\/.+/.test(params.mattermost_url)) {\n        throw 'Field \"mattermost_url\" must contain a schema';\n    }\n\n    if (['alarm', 'event'].indexOf(params.send_mode) === -1) {\n        throw 'Incorrect \"send_mode\" parameter given: ' + params.send_mode + '\\nMust be \"alarm\" or \"event\".';\n    }\n\n    if (typeof params.send_to !== 'string' || params.send_to.trim() === '') {\n        throw 'Field \"send_to\" cannot be empty';\n    }\n\n    if (isNaN(params.trigger_id) && params.event_source === '0') {\n        throw 'field \"trigger_id\" is not a number';\n    }\n\n    if (typeof params.zabbix_url !== 'string' || params.zabbix_url.trim() === '') {\n        throw 'Field \"zabbix_url\" cannot be empty';\n    }\n\n    if (!/^(http|https):\\/\\/.+/.test(params.zabbix_url)) {\n        throw 'Field \"zabbix_url\" must contain a schema';\n    }\n\n}\n\ntry {\n    var params = JSON.parse(value);\n\n    validateParams(params);\n\n    var req = new HttpRequest(),\n        fields = {},\n        result = {tags: {}};\n\n    if (typeof params.HTTPProxy === 'string' && params.HTTPProxy.trim() !== '') {\n        req.setProxy(params.HTTPProxy);\n    }\n\n    req.addHeader('Content-Type: application/json; charset=utf-8');\n    req.addHeader('Authorization: Bearer ' + params.bot_token);\n\n    params.mattermost_url = params.mattermost_url.replace(/\\/+$/, '');\n    params.zabbix_url = params.zabbix_url.replace(/\\/+$/, '');\n\n    var APIEndpoint = params.mattermost_url + '/api/v4/';\n\n    var Mattermost = {\n        post_message: APIEndpoint + 'posts',\n        get_channel: APIEndpoint + 'channels/{0}',\n        get_team: APIEndpoint + 'teams/{0}',\n        chat_update: APIEndpoint + 'posts/{0}',\n        direct_channel: APIEndpoint + 'channels/direct',\n        channel_byname: APIEndpoint + 'teams/name/{0}/channels/name/{1}',\n        user_byname: APIEndpoint + 'users/username/{0}',\n        bot_user: APIEndpoint + 'users/me'\n\n    };\n\n    params.send_mode = params.send_mode.toLowerCase();\n    params.send_mode = params.send_mode in SEND_MODE_HANDLERS\n        ? params.send_mode\n        : 'alarm';\n\n    SEND_MODE_HANDLERS[params.send_mode](req, params);\n\n    if (params.event_source === '0') {\n        return JSON.stringify(result);\n    }\n    else {\n        return 'OK';\n    }\n}\ncatch (error) {\n    Zabbix.log(4, '[ Mattermost Webhook ] Mattermost notification failed: ' + error);\n    throw 'Mattermost notification failed: ' + error;\n}",
+                "process_tags": "YES",
+                "show_event_menu": "YES",
+                "event_menu_url": "{EVENT.TAGS.__mattermost_message_link}",
+                "event_menu_name": "Open in Mattermost: {EVENT.TAGS.__mattermost_channel_name}",
+                "message_templates": [
+                    {
+                        "event_source": "TRIGGERS",
+                        "operation_mode": "PROBLEM",
+                        "subject": "Problem: {EVENT.NAME}",
+                        "message": "Problem started at {EVENT.TIME} on {EVENT.DATE}\nProblem name: {EVENT.NAME}\nHost: {HOST.NAME}\nSeverity: {EVENT.SEVERITY}\nOperational data: {EVENT.OPDATA}\nOriginal problem ID: {EVENT.ID}\n{TRIGGER.URL}"
+                    },
+                    {
+                        "event_source": "TRIGGERS",
+                        "operation_mode": "RECOVERY",
+                        "subject": "Resolved in {EVENT.DURATION}: {EVENT.NAME}",
+                        "message": "Problem has been resolved at {EVENT.RECOVERY.TIME} on {EVENT.RECOVERY.DATE}\nProblem name: {EVENT.NAME}\nProblem duration: {EVENT.DURATION}\nHost: {HOST.NAME}\nSeverity: {EVENT.SEVERITY}\nOriginal problem ID: {EVENT.ID}\n{TRIGGER.URL}"
+                    },
+                    {
+                        "event_source": "TRIGGERS",
+                        "operation_mode": "UPDATE",
+                        "subject": "Updated problem in {EVENT.AGE}: {EVENT.NAME}",
+                        "message": "{USER.FULLNAME} {EVENT.UPDATE.ACTION} problem at {EVENT.UPDATE.DATE} {EVENT.UPDATE.TIME}.\n{EVENT.UPDATE.MESSAGE}\n\nCurrent problem status is {EVENT.STATUS}, age is {EVENT.AGE}, acknowledged: {EVENT.ACK.STATUS}."
+                    },
+                    {
+                        "event_source": "DISCOVERY",
+                        "operation_mode": "PROBLEM",
+                        "subject": "Discovery: {DISCOVERY.DEVICE.STATUS} {DISCOVERY.DEVICE.IPADDRESS}",
+                        "message": "Discovery rule: {DISCOVERY.RULE.NAME}\n\nDevice IP: {DISCOVERY.DEVICE.IPADDRESS}\nDevice DNS: {DISCOVERY.DEVICE.DNS}\nDevice status: {DISCOVERY.DEVICE.STATUS}\nDevice uptime: {DISCOVERY.DEVICE.UPTIME}\n\nDevice service name: {DISCOVERY.SERVICE.NAME}\nDevice service port: {DISCOVERY.SERVICE.PORT}\nDevice service status: {DISCOVERY.SERVICE.STATUS}\nDevice service uptime: {DISCOVERY.SERVICE.UPTIME}"
+                    },
+                    {
+                        "event_source": "AUTOREGISTRATION",
+                        "operation_mode": "PROBLEM",
+                        "subject": "Autoregistration: {HOST.HOST}",
+                        "message": "Host name: {HOST.HOST}\nHost IP: {HOST.IP}\nAgent port: {HOST.PORT}"
+                    }
+                ]
+            }
+        ]
+    }
+}

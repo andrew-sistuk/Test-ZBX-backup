@@ -1,0 +1,121 @@
+{
+    "zabbix_export": {
+        "version": "8.0",
+        "media_types": [
+            {
+                "name": "Event-Driven Ansible",
+                "type": "WEBHOOK",
+                "parameters": [
+                    {
+                        "name": "acknowledged",
+                        "value": "{EVENT.ACK.STATUS}"
+                    },
+                    {
+                        "name": "endpoint",
+                        "value": "/endpoint"
+                    },
+                    {
+                        "name": "event_date",
+                        "value": "{EVENT.DATE}"
+                    },
+                    {
+                        "name": "event_id",
+                        "value": "{EVENT.ID}"
+                    },
+                    {
+                        "name": "event_name",
+                        "value": "{EVENT.NAME}"
+                    },
+                    {
+                        "name": "event_nseverity",
+                        "value": "{EVENT.NSEVERITY}"
+                    },
+                    {
+                        "name": "event_object",
+                        "value": "{EVENT.OBJECT}"
+                    },
+                    {
+                        "name": "event_severity",
+                        "value": "{EVENT.SEVERITY}"
+                    },
+                    {
+                        "name": "event_source",
+                        "value": "{EVENT.SOURCE}"
+                    },
+                    {
+                        "name": "event_tags",
+                        "value": "{EVENT.TAGSJSON}"
+                    },
+                    {
+                        "name": "event_time",
+                        "value": "{EVENT.TIME}"
+                    },
+                    {
+                        "name": "event_value",
+                        "value": "{EVENT.VALUE}"
+                    },
+                    {
+                        "name": "host_groups",
+                        "value": "{TRIGGER.HOSTGROUP.NAME}"
+                    },
+                    {
+                        "name": "host_host",
+                        "value": "{HOST.HOST}"
+                    },
+                    {
+                        "name": "host_id",
+                        "value": "{HOST.ID}"
+                    },
+                    {
+                        "name": "host_ip",
+                        "value": "{HOST.IP}"
+                    },
+                    {
+                        "name": "host_port",
+                        "value": "{HOST.PORT}"
+                    },
+                    {
+                        "name": "HTTPProxy"
+                    },
+                    {
+                        "name": "monitoring_source",
+                        "value": "Zabbix sever"
+                    },
+                    {
+                        "name": "operation_data",
+                        "value": "{EVENT.OPDATA}"
+                    },
+                    {
+                        "name": "send_to",
+                        "value": "{ALERT.SENDTO}"
+                    },
+                    {
+                        "name": "subject",
+                        "value": "{ALERT.SUBJECT}"
+                    },
+                    {
+                        "name": "trigger_description",
+                        "value": "{TRIGGER.DESCRIPTION}"
+                    },
+                    {
+                        "name": "trigger_id",
+                        "value": "{TRIGGER.ID}"
+                    },
+                    {
+                        "name": "trigger_name",
+                        "value": "{TRIGGER.NAME}"
+                    }
+                ],
+                "status": "DISABLED",
+                "script": "var Eda = {\n    params: {},\n\n    setParams: function (params) {\n        var required_params = [\n                'send_to',\n                'event_source',\n                'event_value',\n                'event_date',\n                'event_time'],\n            integer_fields = [\n                'event_id',\n                'event_nseverity',\n                'event_object',\n                'event_source',\n                'event_value',\n                'host_id',\n                'trigger_id'];\n\n        required_params.forEach(function (field) {\n            if (typeof params !== 'object' || typeof params[field] === 'undefined' || params[field] === '') {\n                throw 'Required param is not set: \"' + field + '\".';\n            }\n        });\n\n        Eda.params = params;\n\n        integer_fields.forEach(function (key) {\n                if (typeof Eda.params[key] !== 'undefined') {\n                    if (isNaN(Eda.params[key])) {\n                        throw 'Parameter \"' + key + '\" must be integer. Given value: ' + Eda.params[key];\n                    }\n                    Eda.params[key] = parseInt(Eda.params[key]);\n                }\n            });\n\n        // Check type of event. Possible values: 0 - Trigger\n        if (params.event_source != 0) {\n            throw ('Incorrect \"event_source\" parameter given: ' + params.event_source \n                + '\\nOnly trigger-based events are supported');\n        }\n\n        // Check trigger update and trigger resolve events\n        if (params.event_source == 0 && params.event_value != 1) {\n            throw ('Incorrect \"event_value\" parameter given: \"' + params.event_value \n                + '\".\\nOnly trigger-based events of problem are supported');\n        }\n        \n        // Check endpoint\n        Eda.params.endpoint = (Eda.params.endpoint.startsWith('/'))\n                ? Eda.params.endpoint : '/' + Eda.params.endpoint;\n        // Prepare groups\n        Eda.params.host_groups = (typeof Eda.params['host_groups'] !== 'undefined')\n                ? this.prepareHostgroups(Eda.params.host_groups): []\n        // Prepare tags\n        Eda.params.event_tags = (typeof Eda.params['event_tags'] !== 'undefined')\n                ? this.transformTags(Eda.params.event_tags): {}\n        // Prepare timestamp\n        Eda.params.event_datetime_timestamp = this.getTimestamp(\n            Eda.params.event_date, Eda.params.event_time)\n    },\n\n    setProxy: function (HTTPProxy) {\n        Eda.HTTPProxy = HTTPProxy;\n    },\n\n    prepareHostgroups: function (hostgroups) {\n        var host_groups = []; \n        hostgroups.split(',').forEach(function (group) {\n            group = group.trim();\n            if (group.length > 0) {\n                host_groups.push(group);\n            }\n        });\n        return host_groups;\n    },\n\n    getTimestamp: function (date, time) {\n        try {\n            return Date.parse(date.split('.').join('-') + 'T' + time + '.000Z') / 1000 + new Date().getTimezoneOffset() * 60;\n        } catch (_) {}\n    \n        throw ('Failed to parse event time.');\n    },\n\n    transformTags: function (event_tags) {\n        var tags = {};\n        if (event_tags) {\n            try {\n                JSON.parse(event_tags).forEach(function (object) {\n                    var tag = object['tag'];\n                    tags[tag] = tags[tag] || [];\n                    tags[tag].push(object['value']);\n                });\n            } catch (error) {\n                throw 'Event tags format is invalid.';\n            }\n        }\n    \n        return tags;\n    },\n\n    sendMessage: function () {\n        var response, request = new HttpRequest();\n        var url = Eda.params['send_to'] + Eda.params['endpoint'];\n        var data = JSON.stringify(Eda.params);\n        Zabbix.log(4, '[ Event-Driven Ansible webhook ] URL: ' + url + ' data: ' + data);\n        \n        if (typeof Eda.HTTPProxy !== 'undefined' && Eda.HTTPProxy !== '') {\n            request.setProxy(Eda.HTTPProxy);\n        }\n        request.addHeader('Content-Type: application/json');\n        response = request.post(url, data);\n        \n        Zabbix.log(4, '[ Event-Driven Ansible webhook ] HTTP code: ' + request.getStatus()\n            + ' response: ' + response);\n\n        if (request.getStatus() !== 200) {\n            throw 'Request failed with status code ' + request.getStatus() + ': ' + response;\n        }\n    }\n};\n\n\ntry {\n    var params = JSON.parse(value);\n    \n    Eda.setParams(params);\n    Eda.setProxy(params.HTTPProxy);\n    Eda.sendMessage();\n    return true;\n}\ncatch (error) {\n    Zabbix.log(3, '[ Event-Driven Ansible webhook ] notification failed: ' + error);\n    throw 'Sending failed: ' + error;\n}",
+                "message_templates": [
+                    {
+                        "event_source": "TRIGGERS",
+                        "operation_mode": "PROBLEM",
+                        "subject": "Event ID: {EVENT.ID}, Host: {HOST.HOST}, Problem: {EVENT.NAME}"
+                    }
+                ]
+            }
+        ]
+    }
+}

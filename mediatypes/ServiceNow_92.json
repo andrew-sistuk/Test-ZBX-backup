@@ -1,0 +1,119 @@
+{
+    "zabbix_export": {
+        "version": "8.0",
+        "media_types": [
+            {
+                "name": "ServiceNow",
+                "type": "WEBHOOK",
+                "parameters": [
+                    {
+                        "name": "alert_message",
+                        "value": "{ALERT.MESSAGE}"
+                    },
+                    {
+                        "name": "alert_subject",
+                        "value": "{ALERT.SUBJECT}"
+                    },
+                    {
+                        "name": "event_nseverity",
+                        "value": "{EVENT.NSEVERITY}"
+                    },
+                    {
+                        "name": "event_recovery_value",
+                        "value": "{EVENT.RECOVERY.VALUE}"
+                    },
+                    {
+                        "name": "event_source",
+                        "value": "{EVENT.SOURCE}"
+                    },
+                    {
+                        "name": "event_update_status",
+                        "value": "{EVENT.UPDATE.STATUS}"
+                    },
+                    {
+                        "name": "event_value",
+                        "value": "{EVENT.VALUE}"
+                    },
+                    {
+                        "name": "servicenow_password",
+                        "value": "<PLACE PASSWORD HERE>"
+                    },
+                    {
+                        "name": "servicenow_sys_id",
+                        "value": "{EVENT.TAGS.__zbx_servicenow_sys_id}"
+                    },
+                    {
+                        "name": "servicenow_url",
+                        "value": "{ALERT.SENDTO}"
+                    },
+                    {
+                        "name": "servicenow_user",
+                        "value": "<PLACE USERNAME HERE>"
+                    },
+                    {
+                        "name": "urgency_for_average",
+                        "value": "2"
+                    },
+                    {
+                        "name": "urgency_for_disaster",
+                        "value": "1"
+                    },
+                    {
+                        "name": "urgency_for_high",
+                        "value": "2"
+                    },
+                    {
+                        "name": "urgency_for_information",
+                        "value": "3"
+                    },
+                    {
+                        "name": "urgency_for_not_classified",
+                        "value": "3"
+                    },
+                    {
+                        "name": "urgency_for_warning",
+                        "value": "3"
+                    }
+                ],
+                "status": "DISABLED",
+                "script": "var ServiceNow = {\n    params: {},\n\n    setParams: function (params) {\n        if (typeof params !== 'object') {\n            return;\n        }\n\n        ServiceNow.params = params;\n        if (typeof ServiceNow.params.url === 'string') {\n            if (!ServiceNow.params.url.endsWith('/')) {\n                ServiceNow.params.url += '/';\n            }\n\n            ServiceNow.params.url += 'api/now/table/incident';\n        }\n    },\n\n    setProxy: function (HTTPProxy) {\n        ServiceNow.HTTPProxy = HTTPProxy;\n    },\n\n    setFields: function (data, fields) {\n        if (typeof fields === 'object' && Object.keys(fields).length) {\n            Object.keys(fields)\n                .forEach(function(field) {\n                    data[field] = (fields[field].match(/^\\d{4}\\.\\d{2}\\.\\d{2}$/) !== null)\n                        ? fields[field].replace(/\\./g, '-')\n                        : fields[field];\n                });\n        }\n    },\n\n    request: function (method, data) {\n        ['url', 'user', 'password'].forEach(function (field) {\n            if (typeof ServiceNow.params !== 'object' || typeof ServiceNow.params[field] === 'undefined'\n                || ServiceNow.params[field] === '' ) {\n                throw 'Required ServiceNow param is not set: \"' + field + '\".';\n            }\n        });\n\n        var response,\n            url = ServiceNow.params.url,\n            request = new HttpRequest();\n\n        request.addHeader('Content-Type: application/json');\n        request.addHeader('Authorization: Basic ' + btoa(ServiceNow.params.user + ':' + ServiceNow.params.password));\n\n        if (typeof ServiceNow.HTTPProxy !== 'undefined' && ServiceNow.HTTPProxy !== '') {\n            request.setProxy(ServiceNow.HTTPProxy);\n        }\n\n        if (typeof data !== 'undefined') {\n            data = JSON.stringify(data);\n        }\n\n        Zabbix.log(4, '[ ServiceNow Webhook ] Sending request: ' + url + ((typeof data === 'string')\n            ? ('\\n' + data)\n            : ''));\n\n        switch (method) {\n            case 'get':\n                response = request.get(url, data);\n                break;\n\n            case 'post':\n                response = request.post(url, data);\n                break;\n\n            case 'put':\n                response = request.put(url, data);\n                break;\n\n            default:\n                throw 'Unsupported HTTP request method: ' + method;\n        }\n\n        Zabbix.log(4, '[ ServiceNow Webhook ] Received response with status code ' +\n            request.getStatus() + '\\n' + response);\n\n        if (response !== null) {\n            try {\n                response = JSON.parse(response);\n            }\n            catch (error) {\n                Zabbix.log(4, '[ ServiceNow Webhook ] Failed to parse response received from ServiceNow');\n                response = null;\n            }\n        }\n\n        if (request.getStatus() < 200 || request.getStatus() >= 300) {\n            var message = 'Request failed with status code ' + request.getStatus();\n\n            if (response !== null && typeof response.error.message !== 'undefined'\n                && Object.keys(response.error).length > 0) {\n                message += ': ' + JSON.stringify(response.error.message);\n            }\n\n            throw message + ' Check debug log for more information.';\n        }\n        else if (typeof response.result !== 'object' || typeof response.result.sys_id === 'undefined') {\n            throw 'Cannot create ServiceNow incident. Check debug log for more information.';\n        }\n\n        return response.result;\n    }\n};\n\ntry {\n    var params = JSON.parse(value),\n        fields = {},\n        servicenow = {},\n        data = {},\n        result = {tags: {}},\n        required_params = [\n            'alert_subject', 'alert_message', 'event_source', 'event_value',\n            'event_update_status', 'event_recovery_value', 'event_nseverity'\n        ],\n        severities = [\n            {name: 'not_classified', color: '#97AAB3'},\n            {name: 'information', color: '#7499FF'},\n            {name: 'warning', color: '#FFC859'},\n            {name: 'average', color: '#FFA059'},\n            {name: 'high', color: '#E97659'},\n            {name: 'disaster', color: '#E45959'},\n            {name: 'resolved', color: '#009900'},\n            {name: 'default', color: '#000000'}\n        ],\n        method = 'post',\n        process_tags = true;\n\n    Object.keys(params)\n        .forEach(function (key) {\n            if (key.startsWith('servicenow_')) {\n                servicenow[key.substring(11)] = params[key];\n            }\n            else if (key.startsWith('u_')) {\n                fields[key] = params[key];\n            }\n            else if (required_params.indexOf(key) !== -1 && params[key] === '') {\n                throw 'Parameter \"' + key + '\" can\\'t be empty.';\n            }\n        });\n\n    if ([0, 1, 2, 3].indexOf(parseInt(params.event_source)) === -1) {\n        throw 'Incorrect \"event_source\" parameter given: ' + params.event_source + '\\nMust be 0-3.';\n    }\n\n    if ([0, 1, 2, 3, 4, 5].indexOf(parseInt(params.event_nseverity)) === -1) {\n        params.event_nseverity = '7';\n    }\n\n    // Check {EVENT.VALUE} for trigger-based and internal events.\n    if (params.event_value !== '0' && params.event_value !== '1'\n        && (params.event_source === '0' || params.event_source === '3')) {\n        throw 'Incorrect \"event_value\" parameter given: ' + params.event_value + '\\nMust be 0 or 1.';\n    }\n\n    // Check {EVENT.UPDATE.STATUS} only for trigger-based events.\n    if (params.event_update_status !== '0' && params.event_update_status !== '1' && params.event_source === '0') {\n        throw 'Incorrect \"event_update_status\" parameter given: ' + params.event_update_status + '\\nMust be 0 or 1.';\n    }\n\n    if (params.event_source !== '0' && params.event_recovery_value === '0') {\n        throw 'Recovery operations are supported only for trigger-based actions.';\n    }\n\n    data.short_description = params.alert_subject;\n    data.description = params.alert_message;\n    data.comments = params.alert_message;\n\n    if (typeof params['urgency_for_' + severities[params.event_nseverity].name] !== 'undefined') {\n        data.urgency = params['urgency_for_' + severities[params.event_nseverity].name];\n    }\n\n    ServiceNow.setParams(servicenow);\n    ServiceNow.setProxy(params.HTTPProxy);\n    ServiceNow.setFields(data, fields);\n\n    if (params.event_source === '0' && (params.event_value === '0' || params.event_update_status === '1')) {\n        process_tags = false;\n        method = 'put';\n        delete data.description;\n        delete data.urgency;\n        ServiceNow.params.url += '/' + params.servicenow_sys_id;\n    }\n\n    var response = ServiceNow.request(method, data);\n\n    if (process_tags) {\n        result.tags.__zbx_servicenow_sys_id = response.sys_id;\n        result.tags.__zbx_servicenow_link = params.servicenow_url +\n            (params.servicenow_url.endsWith('/') ? '' : '/') + 'incident.do?sys_id=' + response.sys_id;\n        result.tags.__zbx_servicenow_number = response.number;\n    }\n\n    return JSON.stringify(result);\n}\ncatch (error) {\n    Zabbix.log(3, '[ ServiceNow Webhook ] ERROR: ' + error);\n    throw 'Sending failed: ' + error;\n}",
+                "process_tags": "YES",
+                "show_event_menu": "YES",
+                "event_menu_url": "{EVENT.TAGS.__zbx_servicenow_link}",
+                "event_menu_name": "ServiceNow: {EVENT.TAGS.__zbx_servicenow_number}",
+                "message_templates": [
+                    {
+                        "event_source": "TRIGGERS",
+                        "operation_mode": "PROBLEM",
+                        "subject": "[{EVENT.STATUS}] {EVENT.NAME}",
+                        "message": "Problem started at {EVENT.TIME} on {EVENT.DATE}\nProblem name: {EVENT.NAME}\nHost: {HOST.NAME}\nSeverity: {EVENT.SEVERITY}\nOperational data: {EVENT.OPDATA}\nOriginal problem ID: {EVENT.ID}\n{TRIGGER.URL}"
+                    },
+                    {
+                        "event_source": "TRIGGERS",
+                        "operation_mode": "RECOVERY",
+                        "subject": "[{EVENT.STATUS}] {EVENT.NAME}",
+                        "message": "Problem has been resolved in {EVENT.DURATION} at {EVENT.RECOVERY.TIME} on {EVENT.RECOVERY.DATE}\nProblem name: {EVENT.NAME}\nHost: {HOST.NAME}\nSeverity: {EVENT.SEVERITY}\nOriginal problem ID: {EVENT.ID}\n{TRIGGER.URL}"
+                    },
+                    {
+                        "event_source": "TRIGGERS",
+                        "operation_mode": "UPDATE",
+                        "subject": "[{EVENT.STATUS}] {EVENT.NAME}",
+                        "message": "{USER.FULLNAME} {EVENT.UPDATE.ACTION} problem at {EVENT.UPDATE.DATE} {EVENT.UPDATE.TIME}.\n{EVENT.UPDATE.MESSAGE}\n\nCurrent problem status is {EVENT.STATUS}, acknowledged: {EVENT.ACK.STATUS}."
+                    },
+                    {
+                        "event_source": "DISCOVERY",
+                        "operation_mode": "PROBLEM",
+                        "subject": "Discovery: {DISCOVERY.DEVICE.STATUS} {DISCOVERY.DEVICE.IPADDRESS}",
+                        "message": "Discovery rule: {DISCOVERY.RULE.NAME}\n\nDevice IP: {DISCOVERY.DEVICE.IPADDRESS}\nDevice DNS: {DISCOVERY.DEVICE.DNS}\nDevice status: {DISCOVERY.DEVICE.STATUS}\nDevice uptime: {DISCOVERY.DEVICE.UPTIME}\n\nDevice service name: {DISCOVERY.SERVICE.NAME}\nDevice service port: {DISCOVERY.SERVICE.PORT}\nDevice service status: {DISCOVERY.SERVICE.STATUS}\nDevice service uptime: {DISCOVERY.SERVICE.UPTIME}"
+                    },
+                    {
+                        "event_source": "AUTOREGISTRATION",
+                        "operation_mode": "PROBLEM",
+                        "subject": "Autoregistration: {HOST.HOST}",
+                        "message": "Host name: {HOST.HOST}\nHost IP: {HOST.IP}\nAgent port: {HOST.PORT}"
+                    }
+                ]
+            }
+        ]
+    }
+}

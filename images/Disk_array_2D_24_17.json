@@ -1,0 +1,12 @@
+{
+    "zabbix_export": {
+        "version": "8.0",
+        "images": [
+            {
+                "name": "Disk_array_2D_(24)",
+                "imagetype": "1",
+                "encodedImage": "iVBORw0KGgoAAAANSUhEUgAAABgAAAAECAYAAACUY/8YAAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAACmAAAApgBNtNH3wAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAAEYSURBVBiVBcFLT9tAFIDR784zkIDsqvSBIpBYseE3ZF9+fbqtWgmJSmRRy1Eo2J47czlHttvt6cfj46bVT1x9EQ7Pz3w7nfgVE7c3D2w2yjAMrJ+e+AN0n3tAUBzz4cD5NBHu73n9+5uL6zuGYeDryws/RVDVKex2u6yt4X2lVsGHyPtqhTRQnSnFEBHqeo0vBQOaCSFG9OwM9R5RRWJGnCPljF5eEqaZ4/HoXdd10AwoTNNMNWNUxTCch/9vbyyl8K9WzHlKqTRr1KoUhNfaAKjm0KK01hhbI4RA3/fi9vv9Ka+yRb9isz7HW2MbAilGUsz0XUdOme/NkFLIOZFTxDlHLAt9q6SULIiRUgQzrpaFssyM41g/ABO6jpCEhcfmAAAAAElFTkSuQmCC"
+            }
+        ]
+    }
+}

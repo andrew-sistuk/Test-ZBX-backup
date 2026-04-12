@@ -1,0 +1,152 @@
+{
+    "zabbix_export": {
+        "version": "8.0",
+        "media_types": [
+            {
+                "name": "Slack",
+                "type": "WEBHOOK",
+                "parameters": [
+                    {
+                        "name": "alert_message",
+                        "value": "{ALERT.MESSAGE}"
+                    },
+                    {
+                        "name": "alert_subject",
+                        "value": "{ALERT.SUBJECT}"
+                    },
+                    {
+                        "name": "bot_token",
+                        "value": "<PLACE YOUR TOKEN>"
+                    },
+                    {
+                        "name": "channel",
+                        "value": "{ALERT.SENDTO}"
+                    },
+                    {
+                        "name": "event_id",
+                        "value": "{EVENT.ID}"
+                    },
+                    {
+                        "name": "event_nseverity",
+                        "value": "{EVENT.NSEVERITY}"
+                    },
+                    {
+                        "name": "event_severity",
+                        "value": "{EVENT.SEVERITY}"
+                    },
+                    {
+                        "name": "event_source",
+                        "value": "{EVENT.SOURCE}"
+                    },
+                    {
+                        "name": "event_tags",
+                        "value": "{EVENT.TAGSJSON}"
+                    },
+                    {
+                        "name": "event_update_action",
+                        "value": "{EVENT.UPDATE.ACTION}"
+                    },
+                    {
+                        "name": "event_update_message",
+                        "value": "{EVENT.UPDATE.MESSAGE}"
+                    },
+                    {
+                        "name": "event_update_nseverity",
+                        "value": "{EVENT.UPDATE.NSEVERITY}"
+                    },
+                    {
+                        "name": "event_update_severity",
+                        "value": "{EVENT.UPDATE.SEVERITY}"
+                    },
+                    {
+                        "name": "event_update_status",
+                        "value": "{EVENT.UPDATE.STATUS}"
+                    },
+                    {
+                        "name": "event_value",
+                        "value": "{EVENT.VALUE}"
+                    },
+                    {
+                        "name": "slack_mode",
+                        "value": "alarm"
+                    },
+                    {
+                        "name": "trigger_id",
+                        "value": "{TRIGGER.ID}"
+                    },
+                    {
+                        "name": "zabbix_url",
+                        "value": "{$ZABBIX.URL}"
+                    }
+                ],
+                "status": "DISABLED",
+                "attempts": "1",
+                "script": "const CLogger = function(serviceName) {\n\tthis.serviceName = serviceName;\n\tthis.INFO = 4\n\tthis.WARN = 3\n\tthis.ERROR = 2\n\tthis.log = function(level, msg) {\n\t\tZabbix.log(level, '[' + this.serviceName + '] ' + msg);\n\t}\n}\n\nconst CWebhook = function(value) {\n\ttry {\n\t\tparams = JSON.parse(value);\n\n\t\tif (['0', '1', '2', '3', '4'].indexOf(params.event_source) === -1) {\n\t\t\tthrow 'Incorrect \"event_source\" parameter given: ' + params.event_source + '.\\nMust be 0-4.';\n\t\t}\n\n\t\tif (['0', '3', '4'].indexOf(params.event_source) !== -1 && ['0', '1'].indexOf(params.event_value) === -1) {\n\t\t\tthrow 'Incorrect \"event_value\" parameter given: ' + params.event_value + '.\\nMust be 0 or 1.';\n\t\t}\n\n\t\tif (['0', '3', '4'].indexOf(params.event_source) !== -1) {\n\t\t\tif (params.event_source === '1' && ['0', '1', '2', '3'].indexOf(params.event_value) === -1) {\n\t\t\t\tthrow 'Incorrect \"event_value\" parameter given: ' + params.event_value + '.\\nMust be 0-3.';\n\t\t\t}\n\n\t\t\tif (params.event_source === '0' && ['0', '1'].indexOf(params.event_update_status) === -1) {\n\t\t\t\tthrow 'Incorrect \"event_update_status\" parameter given: ' + params.event_update_status + '.\\nMust be 0 or 1.';\n\t\t\t}\n\n\t\t\tif (params.event_source === '4') {\n\t\t\t\tif (['0', '1', '2', '3', '4', '5'].indexOf(params.event_update_nseverity) !== -1 && params.event_update_nseverity != params.event_nseverity) {\n\t\t\t\t\tparams.event_nseverity = params.event_update_nseverity;\n\t\t\t\t\tparams.event_severity = params.event_update_severity;\n\t\t\t\t\tparams.event_update_status = '1';\n\t\t\t\t}\n\t\t\t}\n\t\t}\n\n\t\tthis.runCallback = function(name, params) {\n\t\t\tif (typeof this[name] === 'function') {\n\t\t\t\treturn this[name].apply(this, [params]);\n\t\t\t}\n\t\t}\n\n\t\tthis.handleEvent = function(source, event) {\n\t\t\tconst alert = { source: source, event: event };\n\t\t\treturn [\n\t\t\t\tthis.runCallback('on' + source + event, alert),\n\t\t\t\tthis.runCallback('on' + event, alert),\n\t\t\t\tthis.runCallback('onEvent', alert)\n\t\t\t];\n\t\t}\n\n\t\tthis.handleEventless = function(source) {\n\t\t\tconst alert = { source: source, event: null };\n\t\t\treturn [\n\t\t\t\tthis.runCallback('on' + source, alert),\n\t\t\t\tthis.runCallback('onEvent', alert)\n\t\t\t];\n\t\t}\n\n\t\tthis.run = function() {\n\t\t\tvar results = [];\n\t\t\tif (typeof this.httpProxy === 'string' && this.httpProxy.trim() !== '') {\n\t\t\t\tthis.request.setProxy(this.httpProxy);\n\t\t\t}\n\t\t\tconst types = { '0': 'Trigger', '1': 'Discovery', '2': 'Autoreg', '3': 'Internal', '4': 'Service' };\n\n\t\t\tif (['0', '3', '4'].indexOf(this.params.event_source) !== -1) {\n\t\t\t\tvar event = (this.params.event_update_status === '1')\n\t\t\t\t\t? 'Update'\n\t\t\t\t\t: ((this.params.event_value === '1') ? 'Problem' : 'Resolve');\n\n\t\t\t\tresults = this.handleEvent(types[this.params.event_source], event);\n\t\t\t}\n\t\t\telse if (typeof types[this.params.event_source] !== 'undefined') {\n\t\t\t\tresults = this.handleEventless(types[this.params.event_source]);\n\t\t\t}\n\t\t\telse {\n\t\t\t\tthrow 'Unexpected \"event_source\": ' + this.params.event_source;\n\t\t\t}\n\n\t\t\tfor (idx in results) {\n\t\t\t\tif (typeof results[idx] !== 'undefined') {\n\t\t\t\t\treturn JSON.stringify(results[idx]);\n\t\t\t\t}\n\t\t\t}\n\t\t}\n\t\tthis.httpProxy = params.http_proxy;\n\t\tthis.params = params;\n\t\tthis.runCallback('onCheckParams', {});\n\t} catch (error) {\n\t\tthrow 'Webhook processing failed: ' + error;\n\t}\n}\n\nconst CParamValidator = {\n\n\tisType: function(value, type) {\n\t\tif (type === 'array') {\n\t\t\treturn Array.isArray(value);\n\t\t}\n\t\tif (type === 'integer') {\n\t\t\treturn CParamValidator.isInteger(value);\n\t\t}\n\t\tif (type === 'float') {\n\t\t\treturn CParamValidator.isFloat(value);\n\t\t}\n\n\t\treturn (typeof value === type);\n\t},\n\n\tisInteger: function(value) {\n\t\tif (!CParamValidator.ifMatch(value, /^-?\\d+$/)) {\n\t\t\treturn false;\n\t\t}\n\n\t\treturn !isNaN(parseInt(value));\n\t},\n\n\tisFloat: function(value) {\n\t\tif (!CParamValidator.ifMatch(value, /^-?\\d+\\.\\d+$/)) {\n\t\t\treturn false;\n\t\t}\n\n\t\treturn !isNaN(parseFloat(value));\n\t},\n\n\tisDefined: function(value) {\n\t\treturn !CParamValidator.isType(value, 'undefined');\n\t},\n\n\tisEmpty: function(value) {\n\t\tif (!CParamValidator.isType(value, 'string')) {\n\t\t\tthrow 'Value \"' + value + '\" must be a string to be checked for emptiness.';\n\t\t}\n\n\t\treturn (value.trim() === '');\n\t},\n\n\tisMacroSet: function(value, macro) {\n\t\tif (CParamValidator.isDefined(macro)) {\n\t\t\treturn !(CParamValidator.ifMatch(value, '^\\{' + macro + '\\}$'))\n\t\t}\n\n\t\treturn !(CParamValidator.ifMatch(value, '^\\{[$#]{0,1}[A-Z_\\.]+[\\:]{0,1}[\"]{0,1}.*[\"]{0,1}\\}$') || value === '*UNKNOWN*')\n\t},\n\n\twithinRange: function(value, min, max) {\n\t\tif (!CParamValidator.isType(value, 'number')) {\n\t\t\tthrow 'Value \"' + value + '\" must be a number to be checked for range.';\n\t\t}\n\t\tif (value < ((CParamValidator.isDefined(min)) ? min : value)\n\t\t\t|| value > ((CParamValidator.isDefined(max)) ? max : value)) {\n\t\t\treturn false;\n\t\t}\n\n\t\treturn true;\n\t},\n\n\tinArray: function(value, array) {\n\t\tif (!CParamValidator.isType(array, 'array')) {\n\t\t\tthrow 'The array must be an array to check the value for existing in it.';\n\t\t}\n\n\t\treturn (array.indexOf((typeof value === 'string') ? value.toLowerCase() : value) !== -1);\n\t},\n\n\tifMatch: function(value, regex) {\n\t\treturn (new RegExp(regex)).test(value);\n\t},\n\n\tmatch: function(value, regex) {\n\t\tif (!CParamValidator.isType(value, 'string')) {\n\t\t\tthrow 'Value \"' + value + '\" must be a string to be matched with the regular expression.';\n\t\t}\n\n\t\treturn value.match(new RegExp(regex));\n\t},\n\n\tcheckURL: function(value) {\n\t\tif (CParamValidator.isEmpty(value)) {\n\t\t\tthrow 'URL value \"' + value + '\" must be a non-empty string.';\n\t\t}\n\t\tif (!CParamValidator.ifMatch(value, '^(http|https):\\/\\/.+')) {\n\t\t\tthrow 'URL value \"' + value + '\" must contain a schema.';\n\t\t}\n\n\t\treturn value.endsWith('/') ? value.slice(0, -1) : value;\n\t},\n\n\tcheck: function(key, rule, params) {\n\t\tif (!CParamValidator.isDefined(rule.type)) {\n\t\t\tthrow 'Mandatory attribute \"type\" has not been defined for parameter \"' + key + '\".';\n\t\t}\n\t\tif (!CParamValidator.isDefined(params[key])) {\n\t\t\tthrow 'Checked parameter \"' + key + '\" was not found in the list of input parameters.';\n\t\t}\n\t\tvar value = params[key],\n\t\t\terror_message = null;\n\t\tswitch (rule.type) {\n\t\t\tcase 'string':\n\t\t\t\tif (!CParamValidator.isType(value, 'string')) {\n\t\t\t\t\tthrow 'Value \"' + key + '\" must be a string.';\n\t\t\t\t}\n\t\t\t\tif (CParamValidator.isEmpty(value)) {\n\t\t\t\t\terror_message = 'Value \"' + key + '\" must be a non-empty string';\n\t\t\t\t\tbreak;\n\t\t\t\t}\n\t\t\t\tif (CParamValidator.isDefined(rule.len) && value.length < rule.len) {\n\t\t\t\t\terror_message = 'Value \"' + key + '\" must be a string with a length > ' + rule.len;\n\t\t\t\t}\n\t\t\t\tif (CParamValidator.isDefined(rule.regex) && !CParamValidator.ifMatch(value, rule.regex)) {\n\t\t\t\t\terror_message = 'Value \"' + key + '\" must match the regular expression \"' + rule.regex + '\"';\n\t\t\t\t}\n\t\t\t\tif (CParamValidator.isDefined(rule.url) && rule.url === true) {\n\t\t\t\t\tvalue = CParamValidator.checkURL(value);\n\t\t\t\t}\n\t\t\t\tbreak;\n\t\t\tcase 'integer':\n\t\t\t\tif (!CParamValidator.isInteger(value)) {\n\t\t\t\t\terror_message = 'Value \"' + key + '\" must be an integer';\n\t\t\t\t\tbreak;\n\t\t\t\t}\n\t\t\t\tvalue = parseInt(value);\n\t\t\t\tbreak;\n\t\t\tcase 'float':\n\t\t\t\tif (!CParamValidator.isFloat(value)) {\n\t\t\t\t\terror_message = 'Value \"' + key + '\" must be a floating-point number';\n\t\t\t\t\tbreak;\n\t\t\t\t}\n\t\t\t\tvalue = parseFloat(value);\n\t\t\t\tbreak;\n\t\t\tcase 'boolean':\n\t\t\t\tif (CParamValidator.inArray(value, ['1', 'true', 'yes', 'on'])) {\n\t\t\t\t\tvalue = true;\n\t\t\t\t}\n\t\t\t\telse if (CParamValidator.inArray(value, ['0', 'false', 'no', 'off'])) {\n\t\t\t\t\tvalue = false;\n\t\t\t\t}\n\t\t\t\telse {\n\t\t\t\t\terror_message = 'Value \"' + key + '\" must be a boolean-like.';\n\t\t\t\t}\n\t\t\t\tbreak;\n\t\t\tcase 'array':\n\t\t\t\ttry {\n\t\t\t\t\tvalue = JSON.parse(value);\n\t\t\t\t} catch (error) {\n\t\t\t\t\tthrow 'Value \"' + key + '\" contains invalid JSON.';\n\t\t\t\t}\n\t\t\t\tif (!CParamValidator.isType(value, 'array')) {\n\t\t\t\t\terror_message = 'Value \"' + key + '\" must be an array.';\n\t\t\t\t}\n\t\t\t\tif (CParamValidator.isDefined(rule.tags) && rule.tags === true) {\n\t\t\t\t\tvalue = value.reduce(function(acc, obj) {\n\t\t\t\t\t\tacc[obj.tag] = obj.value || null;\n\t\t\t\t\t\treturn acc;\n\t\t\t\t\t}, {});\n\t\t\t\t}\n\t\t\t\tbreak;\n\t\t\tcase 'object':\n\t\t\t\tvalue = JSON.parse(value);\n\t\t\t\tif (!CParamValidator.isType(value, 'object')) {\n\t\t\t\t\terror_message = 'Value \"' + key + '\" must be an object.';\n\t\t\t\t}\n\t\t\t\tbreak;\n\t\t\tdefault:\n\t\t\t\tthrow 'Unexpected attribute type \"' + rule.type + '\" for value \"' + key + '\". Available: ' +\n\t\t\t\t['integer', 'float', 'string', 'boolean', 'array', 'object'].join(', ');\n\t\t}\n\t\tparams[key] = value;\n\t\tif (CParamValidator.inArray(rule.type, ['integer', 'float']) && error_message === null && (CParamValidator.isDefined(rule.min)\n\t\t\t|| CParamValidator.isDefined(rule.max)) && !CParamValidator.withinRange(value, rule.min, rule.max)) {\n\t\t\terror_message = 'Value \"' + key + '\" must be a number ' + ((CParamValidator.isDefined(rule.min) && CParamValidator.isDefined(rule.max))\n\t\t\t\t? (rule.min + '..' + rule.max) : ((CParamValidator.isDefined(rule.min)) ? '>' + rule.min : '<' + rule.max));\n\t\t}\n\t\telse if (CParamValidator.isDefined(rule.array) && !CParamValidator.inArray(value, rule.array)) {\n\t\t\terror_message = 'Value \"' + key + '\" must be in the array ' + JSON.stringify(rule.array);\n\t\t}\n\t\telse if (CParamValidator.isDefined(rule.macro) && !CParamValidator.isMacroSet(value.toString(), rule.macro)) {\n\t\t\terror_message = 'The macro ' + ((CParamValidator.isDefined(rule.macro)) ? '{' + rule.macro + '} ' : ' ') + 'is not set';\n\t\t}\n\t\tif (error_message !== null) {\n\t\t\tif (CParamValidator.isDefined(rule.default) && CParamValidator.isType(rule.default, rule.type)) {\n\t\t\t\tparams[key] = rule.default;\n\t\t\t}\n\t\t\telse {\n\t\t\t\tZabbix.log(4, 'Default value for \"' + key + '\" must be a ' + rule.type + '. Skipped.');\n\t\t\t\tthrow 'Incorrect value for variable \"' + key + '\". ' + error_message;\n\t\t\t}\n\t\t}\n\n\t\treturn this;\n\t},\n\n\tvalidate: function(rules, params) {\n\t\tif (!CParamValidator.isType(params, 'object') || CParamValidator.isType(params, 'array')) {\n\t\t\tthrow 'Incorrect parameters value. The value must be an object.';\n\t\t}\n\t\tfor (var key in rules) {\n\t\t\tCParamValidator.check(key, rules[key], params);\n\t\t}\n\t}\n}\n\nconst CHttpRequest = function(logger) {\n\tthis.request = new HttpRequest();\n\tif (typeof logger !== 'object' || logger === null) {\n\t\tthis.logger = Zabbix;\n\t}\n\telse {\n\t\tthis.logger = logger;\n\t}\n\n\tthis.clearHeader = function() {\n\t\tthis.request.clearHeader();\n\t}\n\n\tthis.addHeaders = function(value) {\n\t\tvar headers = [];\n\n\t\tif (typeof value === 'object' && value !== null) {\n\t\t\tif (!Array.isArray(value)) {\n\t\t\t\tObject.keys(value).forEach(function(key) {\n\t\t\t\t\theaders.push(key + ': ' + value[key]);\n\t\t\t\t});\n\t\t\t}\n\t\t\telse {\n\t\t\t\theaders = value;\n\t\t\t}\n\t\t}\n\t\telse if (typeof value === 'string') {\n\t\t\tvalue.split('\\r\\n').forEach(function(header) {\n\t\t\t\theaders.push(header);\n\t\t\t});\n\t\t}\n\n\t\tfor (var idx in headers) {\n\t\t\tthis.request.addHeader(headers[idx]);\n\t\t}\n\t}\n\n\tthis.setProxy = function(proxy) {\n\t\tthis.request.setProxy(proxy);\n\t}\n\n\tthis.plainRequest = function(method, url, data) {\n\t\tvar resp = null;\n\t\tmethod = method.toLowerCase();\n\t\tthis.logger.log(4, 'Sending ' + method + ' request:' + JSON.stringify(data));\n\t\tif (['get', 'post', 'put', 'patch', 'delete', 'trace'].indexOf(method) !== -1) {\n\t\t\tresp = this.request[method](url, data);\n\t\t}\n\t\telse if (['connect', 'head', 'options'].indexOf(method) !== -1) {\n\t\t\tresp = this.request[method](url);\n\t\t}\n\t\telse {\n\t\t\tthrow 'Unexpected method. Method ' + method + ' is not supported.';\n\t\t}\n\t\tthis.logger.log(4, 'Response has been received: ' + resp);\n\n\t\treturn resp;\n\t}\n\n\tthis.jsonRequest = function(method, url, data) {\n\t\tthis.addHeaders('Content-Type: application/json');\n\t\tvar resp = this.plainRequest(method, url, JSON.stringify(data));\n\t\ttry {\n\t\t\tresp = JSON.parse(resp);\n\t\t}\n\t\tcatch (error) {\n\t\t\tthrow 'Failed to parse response: not well-formed JSON was received';\n\t\t}\n\n\t\treturn resp;\n\t}\n\n\tthis.getStatus = function() {\n\t\treturn this.request.getStatus();\n\t}\n}\n\nconst CWebhookHelper = {\n\n\tcreateProblemURL: function(event_source, zabbix_url, trigger_id, event_id) {\n\t\tif (event_source === '0') {\n\t\t\treturn zabbix_url + '/tr_events.php?triggerid=' + trigger_id + '&eventid=' + event_id;\n\t\t} else if (event_source === '4') {\n\t\t\treturn zabbix_url + '/zabbix.php?action=service.list';\n\t\t}\n\n\t\treturn zabbix_url;\n\t},\n\n};\n\nvar serviceLogName = 'Slack Webhook',\n\tLogger = new CLogger(serviceLogName),\n\tSlack = CWebhook;\n\nSlack.prototype.onCheckParams = function () {\n\tCParamValidator.validate({\n\t\talert_subject: { type: 'string' },\n\t\talert_message: { type: 'string' },\n\t\tbot_token: { type: 'string' },\n\t\tzabbix_url: { type: 'string', url: true },\n\t\tchannel: { type: 'string', macro: 'ALERT.SENDTO' },\n\t\tslack_mode: { type: 'string', array: ['alarm', 'event'], }\n\t}, this.params);\n\n\tif (this.params.event_source === '0') {\n\t\tCParamValidator.validate({\n\t\t\tevent_id: { type: 'integer' },\n\t\t\ttrigger_id: { type: 'integer' }\n\t\t}, this.params);\n\t}\n\n\tif (CParamValidator.inArray(this.params.event_source, ['0', '3', '4'])) {\n\t\tCParamValidator.validate({\n\t\t\tevent_tags: { type: 'array', macro: 'EVENT.TAGSJSON', tags: true, default: {} }\n\t\t}, this.params);\n\t}\n\n\tif (this.params.event_value != '0' && CParamValidator.isDefined(this.params.event_tags['__channel_id_' + this.params.channel])) {\n\t\tthis.params.event_update_status = '1';\n\t}\n\n\tthis.severity_colors = [\n\t\t'#97AAB3',\n\t\t'#7499FF',\n\t\t'#FFC859',\n\t\t'#FFA059',\n\t\t'#E97659',\n\t\t'#E45959'\n\t];\n\n\tthis.resolve_color = '#009900';\n\tthis.slack_endpoint = 'https://slack.com/api/';\n\n\tthis.problem_url = CWebhookHelper.createProblemURL(this.params.event_source, this.params.zabbix_url, this.params.trigger_id, this.params.event_id);\n\n\tthis.data = {\n\t\tchannel: this.params.channel,\n\t\tattachments: [\n\t\t\t{\n\t\t\t\tfallback: this.params.alert_subject,\n\t\t\t\ttitle: this.params.alert_subject,\n\t\t\t\tcolor: this.severity_colors[this.params.event_nseverity],\n\t\t\t\ttitle_link: this.problem_url,\n\t\t\t\ttext: this.params.alert_message,\n\t\t\t\tactions: [\n\t\t\t\t\t{\n\t\t\t\t\t\ttype: 'button',\n\t\t\t\t\t\ttext: 'Open in Zabbix',\n\t\t\t\t\t\turl: this.problem_url\n\t\t\t\t\t}\n\t\t\t\t]\n\t\t\t}\n\t\t]\n\t};\n\n\tthis.reply = {\n\t\tchannel: this.params.channel,\n\t\tthread_ts: '',\n\t\tblocks: [\n\t\t\t{\n\t\t\t\ttype: 'context',\n\t\t\t\telements: [\n\t\t\t\t\t{\n\t\t\t\t\t\ttype: 'plain_text',\n\t\t\t\t\t\ttext: 'Event update message'\n\t\t\t\t\t}\n\t\t\t\t]\n\t\t\t},\n\t\t\t{\n\t\t\t\ttype: 'rich_text',\n\t\t\t\telements: [\n\t\t\t\t\t{\n\t\t\t\t\t\ttype: 'rich_text_section',\n\t\t\t\t\t\telements: [\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\ttype: 'text',\n\t\t\t\t\t\t\t\ttext: '',\n\t\t\t\t\t\t\t\tstyle: {\n\t\t\t\t\t\t\t\t\titalic: true\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t]\n\t\t\t\t\t}\n\t\t\t\t]\n\t\t\t}\n\t\t]\n\t};\n};\n\nSlack.prototype.sendRequest = function (route, data, tags) {\n\tthis.request.clearHeader();\n\tthis.request.addHeaders({\n\t\t'Content-Type': 'application/json; charset=utf-8;',\n\t\t'Authorization': 'Bearer ' + this.params.bot_token\n\t});\n\n\tvar response = this.request.jsonRequest('POST', this.slack_endpoint + route, data);\n\n\tif (this.request.getStatus() !== 200 || !CParamValidator.isType(response.ok, 'boolean') || response.ok !== true) {\n\t\tLogger.log(Logger.INFO, 'HTTP code: ' + this.request.getStatus());\n\t\tif (CParamValidator.isType(response.error, 'string')) {\n\t\t\tthrow 'Endpoint response:' + response.error;\n\t\t}\n\t\telse {\n\t\t\tthrow 'Unknown error. Check debug log for more information.';\n\t\t}\n\t}\n\n\tif (tags) {\n\t\treturn {\n\t\t\ttags: {\n\t\t\t\t['__message_ts_' + this.params.channel]: response.ts,\n\t\t\t\t['__channel_id_' + this.params.channel]: response.channel,\n\t\t\t\t['__message_link_' + this.params.channel]: this.getPermalink(response.channel, response.ts),\n\t\t\t}\n\t\t};\n\n\t}\n\telse {\n\t\treturn { tags: {} };\n\t}\n};\n\nSlack.prototype.getPermalink = function (channel, message_ts) {\n\tvar response = this.request.jsonRequest('GET', this.slack_endpoint + 'chat.getPermalink' + '?channel=' + channel + '&message_ts=' + message_ts);\n\n\tif (this.request.getStatus() !== 200 || !CParamValidator.isType(response.ok, 'boolean') || response.ok !== true) {\n\t\tLogger.log(Logger.INFO, 'HTTP code: ' + this.request.getStatus());\n\t\tif (CParamValidator.isType(response.error, 'string')) {\n\t\t\tthrow 'Endpoint response:' + response.error;\n\t\t}\n\t\telse {\n\t\t\tthrow 'Unknown error. Check debug log for more information.';\n\t\t}\n\t}\n\n\tif (!CParamValidator.isDefined(response.permalink)) {\n\t\tthrow 'Permalink is missed from the JSON response';\n\t}\n\n\treturn response.permalink;\n};\n\nSlack.prototype.onProblem = function (properties) {\n\tLogger.log(Logger.INFO, 'Source: ' + properties.source + '; Event: ' + properties.event);\n\n\tif (this.params.slack_mode === \"alarm\") {\n\t\treturn this.sendRequest('chat.postMessage', this.data, true);\n\t} else {\n\t\treturn this.sendRequest('chat.postMessage', this.data, false);\n\t}\n};\n\nSlack.prototype.onUpdate = function (properties) {\n\tLogger.log(Logger.INFO, 'Source: ' + properties.source + '; Event: ' + properties.event);\n\n\tif (this.params.slack_mode === \"alarm\") {\n\t\tthis.data.channel = this.params.event_tags['__channel_id_' + this.params.channel];\n\t\tthis.data.ts = this.params.event_tags['__message_ts_' + this.params.channel];\n\n\t\tif (CParamValidator.isMacroSet(this.params.event_update_message, 'EVENT.UPDATE.MESSAGE') && !CParamValidator.isEmpty(this.params.event_update_message)) {\n\t\t\tthis.reply.thread_ts = this.data.ts;\n\t\t\tthis.reply.blocks[1].elements[0].elements[0].text = this.params.event_update_message;\n\t\t\tthis.sendRequest('chat.postMessage', this.reply, false);\n\t\t}\n\n\t\tif (/\\backnowledged/.test(this.params.event_update_action)) {\n\t\t\tthis.sendRequest('reactions.add', { channel: this.data.channel, timestamp: this.data.ts, name: 'white_check_mark' }, false);\n\t\t}\n\n\t\tif (/\\bunacknowledged/.test(this.params.event_update_action)) {\n\t\t\tthis.sendRequest('reactions.remove', { channel: this.data.channel, timestamp: this.data.ts, name: 'white_check_mark' }, false);\n\t\t}\n\n\t\tif (/\\bclosed/.test(this.params.event_update_action)) {\n\t\t\treturn { tags: {} };\n\t\t}\n\t\telse {\n\t\t\treturn this.sendRequest('chat.update', this.data, false);\n\t\t}\n\t} else {\n\t\treturn this.sendRequest('chat.postMessage', this.data, false);\n\t}\n};\n\nSlack.prototype.onResolve = function (properties) {\n\tLogger.log(Logger.INFO, 'Source: ' + properties.source + '; Event: ' + properties.event);\n\tthis.data.attachments[0].color = this.resolve_color;\n\n\tif (this.params.slack_mode === \"alarm\") {\n\t\tthis.data.channel = this.params.event_tags['__channel_id_' + this.params.channel];\n\t\tthis.data.ts = this.params.event_tags['__message_ts_' + this.params.channel];\n\n\t\treturn this.sendRequest('chat.update', this.data, false);\n\t} else {\n\t\treturn this.sendRequest('chat.postMessage', this.data, false);\n\t}\n};\n\nSlack.prototype.onDiscovery = function (properties) {\n\treturn this.onProblem(properties);\n};\n\nSlack.prototype.onAutoreg = function (properties) {\n\treturn this.onProblem(properties);\n};\n\ntry {\n\tvar hook = new Slack(value);\n\thook.request = new CHttpRequest(Logger);\n\treturn hook.run();\n}\ncatch (error) {\n\tLogger.log(Logger.WARN, 'Notification failed: ' + error);\n\tthrow 'Sending failed: ' + error;\n}",
+                "process_tags": "YES",
+                "description": "Preparing slack for a Zabbix media type:\n1. On the page Your Apps (https://api.slack.com/apps) press 'Create an App', select 'From scratch' and specify its name and workspace.\n2. In the 'Add features and functionality' section, select 'Bots' and press 'Review Scopes to Add'.\n3. In the 'Scopes' section, find 'Bot Token Scopes', press 'Add an OAuth Scope' and add 'chat:write', 'im:write', 'groups:write' and 'reactions:write' scopes.\n4. In the 'Settings' section on the left side of the page press 'Install App' and then 'Install to Workspace'.\n5. Press 'Allow' and copy 'Bot User OAuth Access Token', which will be used to set up webhook.\n\nIn Zabbix:\n1. Set global macro {$ZABBIX.URL}\n2. Set user media for slack using channel name or member ID\n3. Set media param 'bot_token' to the previously created token\n\nFor a detailed instructions please read full README file https://git.zabbix.com/projects/ZBX/repos/zabbix/browse/templates/media/slack/README.md",
+                "message_templates": [
+                    {
+                        "event_source": "TRIGGERS",
+                        "operation_mode": "PROBLEM",
+                        "subject": "Problem: {EVENT.NAME}",
+                        "message": "Problem started at {EVENT.TIME} on {EVENT.DATE}\nProblem name: {EVENT.NAME}\nHost: {HOST.NAME}\nSeverity: {EVENT.SEVERITY}\nOperational data: {EVENT.OPDATA}\nOriginal problem ID: {EVENT.ID}\n{TRIGGER.URL}"
+                    },
+                    {
+                        "event_source": "TRIGGERS",
+                        "operation_mode": "RECOVERY",
+                        "subject": "Resolved in {EVENT.DURATION}: {EVENT.NAME}",
+                        "message": "Problem has been resolved in {EVENT.DURATION} at {EVENT.RECOVERY.TIME} on {EVENT.RECOVERY.DATE}\nProblem name: {EVENT.NAME}\nHost: {HOST.NAME}\nSeverity: {EVENT.SEVERITY}\nOriginal problem ID: {EVENT.ID}\n{TRIGGER.URL}"
+                    },
+                    {
+                        "event_source": "TRIGGERS",
+                        "operation_mode": "UPDATE",
+                        "subject": "Updated: {EVENT.NAME}",
+                        "message": "Problem updated at {EVENT.TIME} on {EVENT.DATE}\n{USER.FULLNAME} {EVENT.UPDATE.ACTION}\nProblem name: {EVENT.NAME}\nHost: {HOST.NAME}\nOperational data: {EVENT.OPDATA}\nOriginal problem ID: {EVENT.ID}\n{TRIGGER.URL}"
+                    },
+                    {
+                        "event_source": "DISCOVERY",
+                        "operation_mode": "PROBLEM",
+                        "subject": "Discovery: {DISCOVERY.DEVICE.STATUS} {DISCOVERY.DEVICE.IPADDRESS}",
+                        "message": "Discovery rule: {DISCOVERY.RULE.NAME}\n\nDevice IP: {DISCOVERY.DEVICE.IPADDRESS}\nDevice DNS: {DISCOVERY.DEVICE.DNS}\nDevice status: {DISCOVERY.DEVICE.STATUS}\nDevice uptime: {DISCOVERY.DEVICE.UPTIME}\n\nDevice service name: {DISCOVERY.SERVICE.NAME}\nDevice service port: {DISCOVERY.SERVICE.PORT}\nDevice service status: {DISCOVERY.SERVICE.STATUS}\nDevice service uptime: {DISCOVERY.SERVICE.UPTIME}"
+                    },
+                    {
+                        "event_source": "AUTOREGISTRATION",
+                        "operation_mode": "PROBLEM",
+                        "subject": "Autoregistration: {HOST.HOST}",
+                        "message": "Host name: {HOST.HOST}\nHost IP: {HOST.IP}\nAgent port: {HOST.PORT}"
+                    },
+                    {
+                        "event_source": "INTERNAL",
+                        "operation_mode": "PROBLEM",
+                        "subject": "[{EVENT.STATUS}] {EVENT.NAME}",
+                        "message": "Problem started at {EVENT.TIME} on {EVENT.DATE}\nProblem name: {EVENT.NAME}\nHost: {HOST.NAME}\nOriginal problem ID: {EVENT.ID}"
+                    },
+                    {
+                        "event_source": "INTERNAL",
+                        "operation_mode": "RECOVERY",
+                        "subject": "[{EVENT.STATUS}] {EVENT.NAME}",
+                        "message": "Problem has been resolved in {EVENT.DURATION} at {EVENT.RECOVERY.TIME} on {EVENT.RECOVERY.DATE}\nProblem name: {EVENT.NAME}\nHost: {HOST.NAME}\nOriginal problem ID: {EVENT.ID}"
+                    },
+                    {
+                        "event_source": "SERVICE",
+                        "operation_mode": "PROBLEM",
+                        "subject": "Service \"{SERVICE.NAME}\" problem: {EVENT.NAME}",
+                        "message": "Service problem started at {EVENT.TIME} on {EVENT.DATE}\nService problem name: {EVENT.NAME}\nService: {SERVICE.NAME}\nSeverity: {EVENT.SEVERITY}\nOriginal problem ID: {EVENT.ID}\nService description: {SERVICE.DESCRIPTION}\n\n{SERVICE.ROOTCAUSE}"
+                    },
+                    {
+                        "event_source": "SERVICE",
+                        "operation_mode": "RECOVERY",
+                        "subject": "Service \"{SERVICE.NAME}\" resolved in {EVENT.DURATION}: {EVENT.NAME}",
+                        "message": "Service \"{SERVICE.NAME}\" has been resolved at {EVENT.RECOVERY.TIME} on {EVENT.RECOVERY.DATE}\nProblem name: {EVENT.NAME}\nProblem duration: {EVENT.DURATION}\nSeverity: {EVENT.SEVERITY}\nOriginal problem ID: {EVENT.ID}\nService description: {SERVICE.DESCRIPTION}"
+                    },
+                    {
+                        "event_source": "SERVICE",
+                        "operation_mode": "UPDATE",
+                        "subject": "Changed \"{SERVICE.NAME}\" service status to {EVENT.UPDATE.SEVERITY} in {EVENT.AGE}",
+                        "message": "Changed \"{SERVICE.NAME}\" service status to {EVENT.UPDATE.SEVERITY} at {EVENT.UPDATE.DATE} {EVENT.UPDATE.TIME}.\nCurrent problem age is {EVENT.AGE}.\nService description: {SERVICE.DESCRIPTION}\n\n{SERVICE.ROOTCAUSE}"
+                    }
+                ]
+            }
+        ]
+    }
+}

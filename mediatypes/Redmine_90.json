@@ -1,0 +1,111 @@
+{
+    "zabbix_export": {
+        "version": "8.0",
+        "media_types": [
+            {
+                "name": "Redmine",
+                "type": "WEBHOOK",
+                "parameters": [
+                    {
+                        "name": "alert_message",
+                        "value": "{ALERT.MESSAGE}"
+                    },
+                    {
+                        "name": "alert_subject",
+                        "value": "{ALERT.SUBJECT}"
+                    },
+                    {
+                        "name": "event_id",
+                        "value": "{EVENT.ID}"
+                    },
+                    {
+                        "name": "event_nseverity",
+                        "value": "{EVENT.NSEVERITY}"
+                    },
+                    {
+                        "name": "event_source",
+                        "value": "{EVENT.SOURCE}"
+                    },
+                    {
+                        "name": "event_update_message",
+                        "value": "{EVENT.UPDATE.MESSAGE}"
+                    },
+                    {
+                        "name": "event_update_status",
+                        "value": "{EVENT.UPDATE.STATUS}"
+                    },
+                    {
+                        "name": "event_value",
+                        "value": "{EVENT.VALUE}"
+                    },
+                    {
+                        "name": "redmine_access_key",
+                        "value": "<PUT YOUR ACCESS KEY>"
+                    },
+                    {
+                        "name": "redmine_issue_key",
+                        "value": "{EVENT.TAGS.__zbx_redmine_issue_id}"
+                    },
+                    {
+                        "name": "redmine_project",
+                        "value": "<PUT YOUR PROJECT ID OR NAME>"
+                    },
+                    {
+                        "name": "redmine_tracker_id",
+                        "value": "<PUT YOUR TRACKER ID>"
+                    },
+                    {
+                        "name": "redmine_url",
+                        "value": "<PUT YOUR REDMINE URL>"
+                    },
+                    {
+                        "name": "trigger_id",
+                        "value": "{TRIGGER.ID}"
+                    },
+                    {
+                        "name": "zabbix_url",
+                        "value": "{$ZABBIX.URL}"
+                    }
+                ],
+                "status": "DISABLED",
+                "script": "var Redmine = {\n    params: {},\n\n    setParams: function (params) {\n        if (typeof params !== 'object') {\n            return;\n        }\n\n        Redmine.params = params;\n        if (typeof Redmine.params.url === 'string') {\n            if (!Redmine.params.url.endsWith('/')) {\n                Redmine.params.url += '/';\n            }\n        }\n    },\n\n    addCustomFields: function (data, fields) {\n        if (typeof fields === 'object' && Object.keys(fields).length) {\n\n            data.issue.custom_fields = [];\n            Object.keys(fields)\n                .forEach(function (field) {\n                    var field_value = fields[field];\n\n                    if (field_value !== undefined) {\n                        data.issue.custom_fields.push({ id: field, value: field_value });\n                    }\n                });\n\n        }\n        return data;\n    },\n\n    request: function (method, query, data) {\n        ['url', 'access_key'].forEach(function (field) {\n            if (typeof Redmine.params !== 'object' || typeof Redmine.params[field] === 'undefined'\n                || Redmine.params[field] === '' ) {\n                throw 'Required param is not set: \"' + field + '\".';\n            }\n        });\n\n        var response,\n            url = Redmine.params.url + query,\n            request = new HttpRequest();\n\n        if (typeof Redmine.HTTPProxy === 'string' && Redmine.HTTPProxy.trim() !== '') {\n            request.setProxy(Redmine.HTTPProxy);\n        }\n\n        request.addHeader('Content-Type: application/json');\n        request.addHeader('X-Redmine-API-Key: ' + Redmine.params.access_key);\n\n        if (typeof data !== 'undefined') {\n            data = JSON.stringify(data);\n        }\n\n        Zabbix.log(4, '[ Redmine Webhook ] Sending request: ' +\n            url + ((typeof data === 'string') ? (' ' + data) : ''));\n\n        switch (method) {\n            case 'get':\n                response = request.get(url, data);\n                break;\n\n            case 'post':\n                response = request.post(url, data);\n                break;\n\n            case 'put':\n                response = request.put(url, data);\n                break;\n\n            default:\n                throw 'Unsupported HTTP request method: ' + method;\n        }\n\n        Zabbix.log(4, '[ Redmine Webhook ] Received response with status code ' + request.getStatus() + ': ' + response);\n\n        if (response !== null) {\n            try {\n                response = JSON.parse(response);\n            }\n            catch (error) {\n                Zabbix.log(4, '[ Redmine Webhook ] Failed to parse response received from Redmine');\n                response = null;\n            }\n        }\n\n        if (request.getStatus() < 200 || request.getStatus() >= 300) {\n            var message = 'Request failed with status code ' + request.getStatus();\n\n            if (response !== null && typeof response.errors !== 'undefined'\n                && Object.keys(response.errors).length > 0) {\n                message += ': ' + JSON.stringify(response.errors);\n            }\n            else if (response !== null && typeof response.errorMessages !== 'undefined'\n                && Object.keys(response.errorMessages).length > 0) {\n                message += ': ' + JSON.stringify(response.errorMessages);\n            }\n\n            throw message + ' Check debug log for more information.';\n        }\n\n        return {\n            status: request.getStatus(),\n            response: response\n        };\n    },\n\n    getProjectID: function(name) {\n        var result = Redmine.request('get', 'projects.json'),\n            project_id;\n\n        if (result.response) {\n            var projects = result.response.projects || [];\n\n            for (var i in projects) {\n                if (projects[i].name === name) {\n                    project_id = projects[i].id;\n                    break;\n                }\n            }\n        }\n        else {\n            Zabbix.log(4, '[ Redmine Webhook ] Failed to retrieve project data.');\n        }\n\n        if (typeof project_id === 'undefined') {\n            throw 'Cannot find project with name: ' + name;\n        }\n\n        return project_id;\n    },\n\n    createIssue: function(subject, description, priority, fields) {\n        var project_id = /^\\d+$/.test(Redmine.params.project)\n                ? Redmine.params.project\n                : Redmine.getProjectID(Redmine.params.project),\n            data = {\n                issue: {\n                    project_id: project_id,\n                    tracker_id: Redmine.params.tracker_id,\n                    subject: subject,\n                    description: description\n                }\n            },\n            result;\n\n        if (priority) {\n            data.issue.priority_id = priority;\n        }\n\n        result = Redmine.request('post', 'issues.json', Redmine.addCustomFields(data, fields));\n\n        if (typeof result.response !== 'object'\n            || typeof result.response.issue.id === 'undefined'\n            || result.status != 201) {\n            throw 'Cannot create Redmine issue. Check debug log for more information.';\n        }\n\n        return result.response.issue.id;\n    },\n\n    updateIssue: function (note, fields, status) {\n        var data = {\n            issue: {\n                notes: note || ''\n            }\n        };\n\n        if (status) {\n            data.issue.status_id = status;\n        }\n\n        Redmine.request('put', 'issues/' + Redmine.params.issue_key + '.json', Redmine.addCustomFields(data, fields));\n    }\n\n};\n\ntry {\n    var params = JSON.parse(value),\n        params_redmine = {},\n        params_fields = {},\n        params_update = {},\n        result = {tags: {}},\n        required_params = [\n            'alert_subject', 'tracker_id', 'project',\n            'event_source', 'event_value',  'event_update_status'\n        ],\n        severities = [\n            {name: 'not_classified', color: '#97AAB3'},\n            {name: 'information', color: '#7499FF'},\n            {name: 'warning', color: '#FFC859'},\n            {name: 'average', color: '#FFA059'},\n            {name: 'high', color: '#E97659'},\n            {name: 'disaster', color: '#E45959'},\n            {name: 'resolved', color: '#009900'},\n            {name: null, color: '#000000'}\n        ],\n        priority;\n\n    Object.keys(params)\n        .forEach(function (key) {\n            if (key.startsWith('redmine_')) {\n                params_redmine[key.substring(8)] = params[key];\n            }\n            else if (key.startsWith('customfield_')) {\n                params_fields[key.substring(12)] = params[key];\n            }\n            else if (key.startsWith('event_update_')) {\n                params_update[key.substring(13)] = params[key];\n            }\n            else if (required_params.indexOf(key) !== -1 && params[key].trim() === '') {\n                throw 'Parameter \"' + key + '\" cannot be empty.';\n            }\n        });\n\n    if ([0, 1, 2, 3].indexOf(parseInt(params.event_source)) === -1) {\n        throw 'Incorrect \"event_source\" parameter given: ' + params.event_source + '\\nMust be 0-3.';\n    }\n\n    // Check {EVENT.VALUE} for trigger-based and internal events.\n    if (params.event_value !== '0' && params.event_value !== '1'\n        && (params.event_source === '0' || params.event_source === '3')) {\n        throw 'Incorrect \"event_value\" parameter given: ' + params.event_value + '\\nMust be 0 or 1.';\n    }\n\n    // Check {EVENT.UPDATE.STATUS} only for trigger-based events.\n    if (params.event_source === '0' && params.event_update_status !== '0' && params.event_update_status !== '1') {\n        throw 'Incorrect \"event_update_status\" parameter given: ' + params.event_update_status + '\\nMust be 0 or 1.';\n    }\n\n\n    if (typeof params_redmine.close_status_id === 'string' && params_redmine.close_status_id.trim() !== '' && !parseInt(params_redmine.close_status_id, 10)) {\n        throw 'Incorrect \"redmine_close_status_id\" parameter given! Must be an integer.';\n    }\n\n    if (params.event_source !== '0' && params.event_value === '0') {\n        throw 'Recovery operations are supported only for trigger-based actions.';\n    }\n\n    if (params.event_source === '0'\n        && ((params.event_value === '1' && params.event_update_status === '1')\n            || (params.event_value === '0'\n                && (params.event_update_status === '0' || params.event_update_status === '1')))\n        && (isNaN(parseInt(params.redmine_issue_key)) || parseInt(params.redmine_issue_key) < 1 )) {\n        throw 'Incorrect \"redmine_issue_key\" parameter given: ' + params.redmine_issue_key +\n            '\\nMust be positive integer.';\n    }\n\n    if ([0, 1, 2, 3, 4, 5].indexOf(parseInt(params.event_nseverity)) === -1) {\n        params.event_nseverity = '7';\n    }\n\n    if (params.event_value === '0') {\n        params.event_nseverity = '6';\n    }\n\n    priority = params['severity_' + severities[params.event_nseverity].name];\n    priority = priority && priority.trim() || severities[7].name;\n\n    Redmine.setParams(params_redmine);\n    Redmine.HTTPProxy = params.HTTPProxy;\n\n    // Create issue for non trigger-based events.\n    if (params.event_source !== '0'\n        && params.event_value !== '0') {\n        Redmine.createIssue(params.alert_subject, params.alert_message, priority);\n    }\n    // Create issue for trigger-based events.\n    else if (params.event_value === '1' && params_update.status === '0') {\n        var issue_id = Redmine.createIssue(params.alert_subject,\n            params.alert_subject + '\\n' + params.alert_message + '\\n' +\n            params.zabbix_url + (params.zabbix_url.endsWith('/') ? '' : '/') +\n            'tr_events.php?triggerid=' + params.trigger_id + '&eventid=' + params.event_id + '\\n',\n            priority,\n            params_fields);\n\n        result.tags.__zbx_redmine_issue_id = issue_id;\n        result.tags.__zbx_redmine_issuelink = params.redmine_url +\n            (params.redmine_url.endsWith('/') ? '' : '/') + 'issues/' + issue_id;\n    }\n    // Close issue if parameter close_status_id is set and it is a recovery operation\n    else if (params.event_value === '0' && typeof params_redmine.close_status_id === 'string' && params_redmine.close_status_id.trim() !== '') {\n        Redmine.updateIssue(params.alert_subject + '\\n' + params.alert_message, params_fields, params_redmine.close_status_id);\n    }\n    // Update created issue for trigger-based event.\n    else {\n        Redmine.updateIssue(params.alert_subject + '\\n' + params.alert_message, params_fields);\n    }\n\n    return JSON.stringify(result);\n}\ncatch (error) {\n    Zabbix.log(3, '[ Redmine Webhook ] ERROR: ' + error);\n    throw 'Sending failed: ' + error;\n}",
+                "process_tags": "YES",
+                "show_event_menu": "YES",
+                "event_menu_url": "{EVENT.TAGS.__zbx_redmine_issuelink}",
+                "event_menu_name": "Redmine: issue #{EVENT.TAGS.__zbx_redmine_issue_id}",
+                "message_templates": [
+                    {
+                        "event_source": "TRIGGERS",
+                        "operation_mode": "PROBLEM",
+                        "subject": "Problem: {EVENT.NAME}",
+                        "message": "Problem started at {EVENT.TIME} on {EVENT.DATE}\nProblem name: {EVENT.NAME}\nHost: {HOST.NAME}\nSeverity: {EVENT.SEVERITY}\nOperational data: {EVENT.OPDATA}\nOriginal problem ID: {EVENT.ID}\n{TRIGGER.URL}"
+                    },
+                    {
+                        "event_source": "TRIGGERS",
+                        "operation_mode": "RECOVERY",
+                        "subject": "Resolved: {EVENT.NAME}",
+                        "message": "Problem has been resolved in {EVENT.DURATION} at {EVENT.RECOVERY.TIME} on {EVENT.RECOVERY.DATE}\nProblem name: {EVENT.NAME}\nHost: {HOST.NAME}\nSeverity: {EVENT.SEVERITY}\nOriginal problem ID: {EVENT.ID}\n{TRIGGER.URL}"
+                    },
+                    {
+                        "event_source": "TRIGGERS",
+                        "operation_mode": "UPDATE",
+                        "subject": "Updated problem: {EVENT.NAME}",
+                        "message": "{USER.FULLNAME} {EVENT.UPDATE.ACTION} problem at {EVENT.UPDATE.DATE} {EVENT.UPDATE.TIME}.\n{EVENT.UPDATE.MESSAGE}\n\nCurrent problem status is {EVENT.STATUS}, acknowledged: {EVENT.ACK.STATUS}."
+                    },
+                    {
+                        "event_source": "DISCOVERY",
+                        "operation_mode": "PROBLEM",
+                        "subject": "Discovery: {DISCOVERY.DEVICE.STATUS} {DISCOVERY.DEVICE.IPADDRESS}",
+                        "message": "Discovery rule: {DISCOVERY.RULE.NAME}\n\nDevice IP: {DISCOVERY.DEVICE.IPADDRESS}\nDevice DNS: {DISCOVERY.DEVICE.DNS}\nDevice status: {DISCOVERY.DEVICE.STATUS}\nDevice uptime: {DISCOVERY.DEVICE.UPTIME}\n\nDevice service name: {DISCOVERY.SERVICE.NAME}\nDevice service port: {DISCOVERY.SERVICE.PORT}\nDevice service status: {DISCOVERY.SERVICE.STATUS}\nDevice service uptime: {DISCOVERY.SERVICE.UPTIME}"
+                    },
+                    {
+                        "event_source": "AUTOREGISTRATION",
+                        "operation_mode": "PROBLEM",
+                        "subject": "Autoregistration: {HOST.HOST}",
+                        "message": "Host name: {HOST.HOST}\nHost IP: {HOST.IP}\nAgent port: {HOST.PORT}"
+                    }
+                ]
+            }
+        ]
+    }
+}
