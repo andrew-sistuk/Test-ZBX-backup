@@ -54,6 +54,7 @@
                 "inventory": {
                     "name": "localhost.localdomain",
                     "os": "Linux version 6.12.0-192.el10.aarch64 (mockbuild@28da2c95ee924593a5e4c019ef676da4) (gcc (GCC) 14.3.1 20251022 (Red Hat 14.3.1-4)",
+                    "contact": "\u044f \u0454 \u0431\u0435\u0442\u043c\u0435\u043d",
                     "location_lat": "56.97612",
                     "location_lon": "24.16553"
                 }
