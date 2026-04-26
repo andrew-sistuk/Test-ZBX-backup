@@ -1,0 +1,11 @@
+{
+    "zabbix_export": {
+        "version": "8.0",
+        "host_groups": [
+            {
+                "uuid": "23406431d0754a42affe1218ac0a1ae2",
+                "name": "abc"
+            }
+        ]
+    }
+}
