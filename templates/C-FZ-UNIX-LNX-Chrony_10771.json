@@ -1,0 +1,445 @@
+{
+    "zabbix_export": {
+        "version": "8.0",
+        "template_groups": [
+            {
+                "uuid": "a3180a1465144035a8deb5b803fb9bfa",
+                "name": "C-FZ-UNIX-LNX"
+            }
+        ],
+        "templates": [
+            {
+                "uuid": "65e518c60839428a957454605ee5c2d7",
+                "template": "C-FZ-UNIX-LNX-Chrony",
+                "name": "C-FZ-UNIX-LNX-Chrony",
+                "description": "## Overview\n\nThis template will parse the various types of data from the acquisition result of chronyc tracking command.  \nThis allows you to detect the change of the time of displacement and Stratum by chrony.",
+                "groups": [
+                    {
+                        "name": "C-FZ-UNIX-LNX"
+                    }
+                ],
+                "items": [
+                    {
+                        "uuid": "bd9feff70f4a4054962ac66445b8d0ec",
+                        "name": "Get tracking",
+                        "key": "chronyc.tracking",
+                        "history": "90d",
+                        "value_type": "TEXT",
+                        "description": "This is the estimated local offset on the last clock update.",
+                        "preprocessing": [
+                            {
+                                "type": "JAVASCRIPT",
+                                "parameters": [
+                                    "function toCamelCase(str) {\n  return str\n    .replace(/(?:^\\w|[A-Z]|\\b\\w|\\s+)/g, function(match, index) {\n      if (index === 0) {\n        return match.toLowerCase();\n      }\n      return match.toUpperCase();\n    })\n    .replace(/\\s+/g, ''); // \u0412\u0438\u0434\u0430\u043b\u044f\u0454\u043c\u043e \u0432\u0441\u0456 \u043f\u0440\u043e\u0431\u0456\u043b\u0438\n}\n\n// \u0420\u043e\u0437\u0431\u0438\u0442\u0438 \u0442\u0435\u043a\u0441\u0442 \u043d\u0430 \u0440\u044f\u0434\u043a\u0438\nvar lines = value.split(\"\\n\");\nvar result = {};\n\n// \u041e\u0431\u0440\u043e\u0431\u0438\u0442\u0438 \u043a\u043e\u0436\u043d\u0438\u0439 \u0440\u044f\u0434\u043e\u043a\nfor (var i = 0; i < lines.length; i++) {\n  var line = lines[i];\n  var idx = line.indexOf(\":\");\n  if (idx !== -1) {\n    var key = line.slice(0, idx).trim(); // \u0412\u0456\u0434\u0440\u0456\u0437\u0430\u0454\u043c\u043e \u0442\u0456\u043b\u044c\u043a\u0438 \u043f\u0440\u043e\u0431\u0456\u043b\u0438\n    var value = line.slice(idx + 1).trim();\n\n    // \u041f\u0435\u0440\u0435\u0442\u0432\u043e\u0440\u0438\u0442\u0438 \u043a\u043b\u044e\u0447 \u043d\u0430 camelCase\n    key = toCamelCase(key);\n\n    result[key] = value;\n  }\n}\n\n// \u041f\u043e\u043a\u0430\u0437\u0430\u0442\u0438 \u0440\u0435\u0437\u0443\u043b\u044c\u0442\u0430\u0442\nreturn JSON.stringify(result, null, 2);"
+                                ]
+                            }
+                        ],
+                        "tags": [
+                            {
+                                "tag": "Metric",
+                                "value": "Raw"
+                            },
+                            {
+                                "tag": "Type",
+                                "value": "Source"
+                            }
+                        ]
+                    },
+                    {
+                        "uuid": "9ad5e401459d4e03a35c600f691b8787",
+                        "name": "Chrony: Last offset",
+                        "type": "DEPENDENT",
+                        "key": "chronyc.tracking.last.offset",
+                        "history": "90d",
+                        "value_type": "FLOAT",
+                        "units": "s",
+                        "description": "This is the estimated local offset on the last clock update.",
+                        "preprocessing": [
+                            {
+                                "type": "JSONPATH",
+                                "parameters": [
+                                    "$.lastOffset"
+                                ]
+                            },
+                            {
+                                "type": "JAVASCRIPT",
+                                "parameters": [
+                                    "return value.split(\" \")[0];"
+                                ]
+                            }
+                        ],
+                        "master_item": {
+                            "key": "chronyc.tracking"
+                        },
+                        "tags": [
+                            {
+                                "tag": "Metric",
+                                "value": "Offset"
+                            },
+                            {
+                                "tag": "Type",
+                                "value": "Last"
+                            }
+                        ]
+                    },
+                    {
+                        "uuid": "541482a426df4d82bd16f7cdbc26355c",
+                        "name": "Chrony: Leap status",
+                        "type": "DEPENDENT",
+                        "key": "chronyc.tracking.leap.status",
+                        "history": "90d",
+                        "value_type": "CHAR",
+                        "description": "This is the leap status, which can be Normal, Insert second, Delete second or Not synchronised.",
+                        "preprocessing": [
+                            {
+                                "type": "JSONPATH",
+                                "parameters": [
+                                    "$.leapStatus"
+                                ]
+                            },
+                            {
+                                "type": "DISCARD_UNCHANGED_HEARTBEAT",
+                                "parameters": [
+                                    "8h"
+                                ]
+                            }
+                        ],
+                        "master_item": {
+                            "key": "chronyc.tracking"
+                        },
+                        "tags": [
+                            {
+                                "tag": "Metric",
+                                "value": "Leap"
+                            },
+                            {
+                                "tag": "Status",
+                                "value": "Sync"
+                            }
+                        ],
+                        "triggers": [
+                            {
+                                "uuid": "4c7026e6e79c44ed8023792274892d4b",
+                                "expression": "find(/C-FZ-UNIX-LNX-Chrony/chronyc.tracking.leap.status,,\"regexp\",\"Not synchronised\")=1",
+                                "name": "Chrony: not synchronized",
+                                "event_name": "Chrony: {HOST.NAME} is not synchronized",
+                                "priority": "WARNING",
+                                "description": "\u0421\u0442\u0430\u043d chronyc tracking \u043f\u043e\u043a\u0430\u0437\u0443\u0454 Not synchronised \u2014 \u0441\u0435\u0440\u0432\u0435\u0440 \u043d\u0435 \u0441\u0438\u043d\u0445\u0440\u043e\u043d\u0456\u0437\u043e\u0432\u0430\u043d\u0438\u0439 \u0437 NTP-\u0434\u0436\u0435\u0440\u0435\u043b\u043e\u043c \u0447\u0430\u0441\u0443.",
+                                "tags": [
+                                    {
+                                        "tag": "Scope",
+                                        "value": "Availability"
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "uuid": "83d88bd150ab4ecab84326f12d0b6d41",
+                        "name": "Chrony synchronized server",
+                        "type": "DEPENDENT",
+                        "key": "chronyc.tracking.referenceID",
+                        "history": "90d",
+                        "value_type": "CHAR",
+                        "description": "This is the reference ID and name (or IP address) if available, of the server to which the computer is currently synchronized.",
+                        "preprocessing": [
+                            {
+                                "type": "JSONPATH",
+                                "parameters": [
+                                    "$.referenceID"
+                                ]
+                            },
+                            {
+                                "type": "DISCARD_UNCHANGED_HEARTBEAT",
+                                "parameters": [
+                                    "8h"
+                                ]
+                            }
+                        ],
+                        "master_item": {
+                            "key": "chronyc.tracking"
+                        },
+                        "tags": [
+                            {
+                                "tag": "Metric",
+                                "value": "Reference"
+                            },
+                            {
+                                "tag": "Type",
+                                "value": "Server"
+                            }
+                        ]
+                    },
+                    {
+                        "uuid": "99c5a22f39894d8eb4a3aafd323e9015",
+                        "name": "Chrony: RMS offset",
+                        "type": "DEPENDENT",
+                        "key": "chronyc.tracking.rms.offset",
+                        "history": "90d",
+                        "value_type": "FLOAT",
+                        "units": "s",
+                        "description": "This is a long-term average of the offset value.",
+                        "preprocessing": [
+                            {
+                                "type": "JSONPATH",
+                                "parameters": [
+                                    "$.rMSOffset"
+                                ]
+                            },
+                            {
+                                "type": "JAVASCRIPT",
+                                "parameters": [
+                                    "return value.split(\" \")[0];"
+                                ]
+                            }
+                        ],
+                        "master_item": {
+                            "key": "chronyc.tracking"
+                        },
+                        "tags": [
+                            {
+                                "tag": "Metric",
+                                "value": "Offset"
+                            },
+                            {
+                                "tag": "Type",
+                                "value": "RMS"
+                            }
+                        ]
+                    },
+                    {
+                        "uuid": "e2a810bf59534910b0c81d2cfebafcfe",
+                        "name": "Chrony: Root delay",
+                        "type": "DEPENDENT",
+                        "key": "chronyc.tracking.root.delay",
+                        "history": "90d",
+                        "value_type": "FLOAT",
+                        "units": "s",
+                        "description": "This is the total of the network path delays to the stratum-1 computer from which the computer is ultimately synchronized. In certain extreme situations, this value can be negative. (This can arise in a symmetric peer arrangement where the computers\u2019 frequencies are not tracking each other and the network delay is very short relative to the turn-around time at each computer.)",
+                        "preprocessing": [
+                            {
+                                "type": "JSONPATH",
+                                "parameters": [
+                                    "$.rootDelay"
+                                ]
+                            },
+                            {
+                                "type": "JAVASCRIPT",
+                                "parameters": [
+                                    "return value.split(\" \")[0];"
+                                ]
+                            }
+                        ],
+                        "master_item": {
+                            "key": "chronyc.tracking"
+                        },
+                        "tags": [
+                            {
+                                "tag": "Metric",
+                                "value": "Delay"
+                            },
+                            {
+                                "tag": "Target",
+                                "value": "Root"
+                            }
+                        ]
+                    },
+                    {
+                        "uuid": "3b8f42ce771b43179fc457997027609b",
+                        "name": "Chrony: Stratum",
+                        "type": "DEPENDENT",
+                        "key": "chronyc.tracking.stratum",
+                        "history": "90d",
+                        "description": "\u0421\u0442\u0440\u0430\u0442\u0443\u043c \u0432\u043a\u0430\u0437\u0443\u0454, \u043d\u0430 \u0441\u043a\u0456\u043b\u044c\u043a\u0438 \u0441\u0442\u0440\u0438\u0431\u043a\u0456\u0432 \u043c\u0438 \u0432\u0456\u0434\u0434\u0430\u043b\u0435\u043d\u0456 \u0432\u0456\u0434 \u043a\u043e\u043c\u043f'\u044e\u0442\u0435\u0440\u0430 \u0437 \u043f\u0456\u0434\u043a\u043b\u044e\u0447\u0435\u043d\u0438\u043c \u0435\u0442\u0430\u043b\u043e\u043d\u043d\u0438\u043c \u0433\u043e\u0434\u0438\u043d\u043d\u0438\u043a\u043e\u043c. \u0422\u0430\u043a\u0438\u0439 \u043a\u043e\u043c\u043f'\u044e\u0442\u0435\u0440 \u0454 \u043a\u043e\u043c\u043f'\u044e\u0442\u0435\u0440\u043e\u043c \u0441\u0442\u0440\u0430\u0442\u0443\u043c\u0443-1, \u0442\u043e\u043c\u0443 \u043a\u043e\u043c\u043f'\u044e\u0442\u0435\u0440 \u0443 \u043f\u0440\u0438\u043a\u043b\u0430\u0434\u0456 \u0437\u043d\u0430\u0445\u043e\u0434\u0438\u0442\u044c\u0441\u044f \u043d\u0430 \u0432\u0456\u0434\u0441\u0442\u0430\u043d\u0456 \u0434\u0432\u043e\u0445 \u0441\u0442\u0440\u0438\u0431\u043a\u0456\u0432.",
+                        "preprocessing": [
+                            {
+                                "type": "JSONPATH",
+                                "parameters": [
+                                    "$.stratum"
+                                ]
+                            }
+                        ],
+                        "master_item": {
+                            "key": "chronyc.tracking"
+                        },
+                        "tags": [
+                            {
+                                "tag": "Metric",
+                                "value": "Stratum"
+                            },
+                            {
+                                "tag": "Scope",
+                                "value": "Inventory"
+                            }
+                        ]
+                    },
+                    {
+                        "uuid": "06b72ce3881a48f4985c4d156c714c02",
+                        "name": "Chrony: System time",
+                        "type": "DEPENDENT",
+                        "key": "chronyc.tracking.system.time",
+                        "history": "90d",
+                        "value_type": "FLOAT",
+                        "units": "s",
+                        "preprocessing": [
+                            {
+                                "type": "JSONPATH",
+                                "parameters": [
+                                    "$.systemTime"
+                                ]
+                            },
+                            {
+                                "type": "JAVASCRIPT",
+                                "parameters": [
+                                    "return value.split(\" \")[0];"
+                                ]
+                            }
+                        ],
+                        "master_item": {
+                            "key": "chronyc.tracking"
+                        },
+                        "tags": [
+                            {
+                                "tag": "Metric",
+                                "value": "Offset"
+                            },
+                            {
+                                "tag": "Type",
+                                "value": "System"
+                            }
+                        ],
+                        "triggers": [
+                            {
+                                "uuid": "f7af7c83ead045e4b09189a967a25b78",
+                                "expression": "min(/C-FZ-UNIX-LNX-Chrony/chronyc.tracking.system.time,5m)>{$CHRONY_MAX_SYSTEM_TIME}",
+                                "name": "Chrony: system time offset too large",
+                                "event_name": "Chrony: system time offset too large (>{$CHRONY_MAX_SYSTEM_TIME})",
+                                "opdata": "Current offset: {ITEM.LASTVALUE}",
+                                "priority": "WARNING",
+                                "description": "\u041c\u0456\u043d\u0456\u043c\u0430\u043b\u044c\u043d\u0435 \u0432\u0456\u0434\u0445\u0438\u043b\u0435\u043d\u043d\u044f \u0441\u0438\u0441\u0442\u0435\u043c\u043d\u043e\u0433\u043e \u0447\u0430\u0441\u0443 \u0432\u0456\u0434 NTP \u0437\u0430 \u043e\u0441\u0442\u0430\u043d\u043d\u0456 5 \u0445\u0432\u0438\u043b\u0438\u043d \u043f\u0435\u0440\u0435\u0432\u0438\u0449\u0443\u0454 \u0434\u043e\u043f\u0443\u0441\u0442\u0438\u043c\u0435 \u0437\u043d\u0430\u0447\u0435\u043d\u043d\u044f {$CHRONY_MAX_SYSTEM_TIME}.",
+                                "tags": [
+                                    {
+                                        "tag": "Scope",
+                                        "value": "Availability"
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "uuid": "01e30bb30e6e45999c7325e11f2584db",
+                        "name": "Chrony: Update interval",
+                        "type": "DEPENDENT",
+                        "key": "chronyc.tracking.update.interval",
+                        "history": "90d",
+                        "value_type": "FLOAT",
+                        "units": "s",
+                        "description": "\u0426\u0435 \u0437\u0430\u0433\u0430\u043b\u044c\u043d\u0430 \u0434\u0438\u0441\u043f\u0435\u0440\u0441\u0456\u044f, \u043d\u0430\u043a\u043e\u043f\u0438\u0447\u0435\u043d\u0430 \u0447\u0435\u0440\u0435\u0437 \u0432\u0441\u0456 \u043a\u043e\u043c\u043f'\u044e\u0442\u0435\u0440\u0438 \u043d\u0430\u0437\u0430\u0434 \u0434\u043e \u043a\u043e\u043c\u043f'\u044e\u0442\u0435\u0440\u0430 \u0440\u0456\u0432\u043d\u044f 1, \u0437 \u044f\u043a\u0438\u043c \u043a\u043e\u043c\u043f'\u044e\u0442\u0435\u0440 \u043e\u0441\u0442\u0430\u0442\u043e\u0447\u043d\u043e \u0441\u0438\u043d\u0445\u0440\u043e\u043d\u0456\u0437\u0443\u0454\u0442\u044c\u0441\u044f. \u0414\u0438\u0441\u043f\u0435\u0440\u0441\u0456\u044f \u043e\u0431\u0443\u043c\u043e\u0432\u043b\u0435\u043d\u0430 \u0440\u043e\u0437\u0434\u0456\u043b\u044c\u043d\u043e\u044e \u0437\u0434\u0430\u0442\u043d\u0456\u0441\u0442\u044e \u0441\u0438\u0441\u0442\u0435\u043c\u043d\u043e\u0433\u043e \u0433\u043e\u0434\u0438\u043d\u043d\u0438\u043a\u0430, \u0441\u0442\u0430\u0442\u0438\u0441\u0442\u0438\u0447\u043d\u0438\u043c\u0438 \u0432\u0456\u0434\u0445\u0438\u043b\u0435\u043d\u043d\u044f\u043c\u0438 \u0432\u0438\u043c\u0456\u0440\u044e\u0432\u0430\u043d\u044c \u0442\u043e\u0449\u043e.",
+                        "preprocessing": [
+                            {
+                                "type": "JSONPATH",
+                                "parameters": [
+                                    "$.updateInterval"
+                                ]
+                            },
+                            {
+                                "type": "STR_REPLACE",
+                                "parameters": [
+                                    " seconds",
+                                    ""
+                                ]
+                            }
+                        ],
+                        "master_item": {
+                            "key": "chronyc.tracking"
+                        },
+                        "tags": [
+                            {
+                                "tag": "Metric",
+                                "value": "Interval"
+                            },
+                            {
+                                "tag": "Target",
+                                "value": "Update"
+                            }
+                        ]
+                    },
+                    {
+                        "uuid": "b0198b188d2847fe84bc89b00b43597e",
+                        "name": "Chrony: Version",
+                        "key": "chronyd.version",
+                        "delay": "15m",
+                        "history": "90d",
+                        "value_type": "CHAR",
+                        "preprocessing": [
+                            {
+                                "type": "DISCARD_UNCHANGED_HEARTBEAT",
+                                "parameters": [
+                                    "8h"
+                                ]
+                            }
+                        ],
+                        "tags": [
+                            {
+                                "tag": "Component",
+                                "value": "Agent"
+                            },
+                            {
+                                "tag": "Metric",
+                                "value": "Version"
+                            }
+                        ]
+                    },
+                    {
+                        "uuid": "a33886cb4e5648fd8b1f3232a0540887",
+                        "name": "Chrony: Number of processes",
+                        "key": "proc.num[,chrony]",
+                        "history": "90d",
+                        "tags": [
+                            {
+                                "tag": "Metric",
+                                "value": "Process"
+                            },
+                            {
+                                "tag": "Process",
+                                "value": "Chronyd"
+                            }
+                        ],
+                        "triggers": [
+                            {
+                                "uuid": "9c91d0b647da4d0baae1285e0fb03fd2",
+                                "expression": "max(/C-FZ-UNIX-LNX-Chrony/proc.num[,chrony],#1)=0",
+                                "name": "Chrony: Service is down",
+                                "event_name": "Chrony: Service is down on {HOST.NAME}",
+                                "opdata": "Current value: {ITEM.LASTVALUE1}",
+                                "priority": "WARNING",
+                                "tags": [
+                                    {
+                                        "tag": "Scope",
+                                        "value": "Availability"
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ],
+                "tags": [
+                    {
+                        "tag": "App",
+                        "value": "NTP"
+                    },
+                    {
+                        "tag": "App",
+                        "value": "\u0421hrony"
+                    }
+                ],
+                "macros": [
+                    {
+                        "macro": "{$CHRONY_MAX_SYSTEM_TIME}",
+                        "value": "2"
+                    }
+                ]
+            }
+        ]
+    }
+}
